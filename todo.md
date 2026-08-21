@@ -16,12 +16,16 @@
 - [x] Aplicar navegação responsiva com os itens Dashboard, Buscar Leads, Meu CRM e Configurações.
 - [x] Criar uma linguagem visual cósmica imersiva e acessível, com gradientes, estrelas, nebulosas, orbs e brilho ciano.
 - [x] Escrever testes unitários para autenticação, isolamento de tenant, mudança de status e filtros de exportação.
-- [ ] Validar o comportamento da API, as interacções principais, a apresentação desktop e mobile e corrigir falhas encontradas.
-- [ ] Guardar uma versão validada do projecto e entregar a aplicação com as instruções de configuração.
+- [x] Validar o comportamento da API, as interacções principais, a apresentação desktop e mobile e corrigir falhas encontradas.
+- [x] Guardar uma versão validada do projecto e entregar a aplicação com as instruções de configuração.
 - [x] Substituir o encaminhamento OAuth do template pela experiência de registo e login local em todas as telas principais.
 - [x] Adicionar estados de erro explícitos e ações de repetição para métricas, histórico, lista/Kanban e detalhes de leads.
 - [x] Permitir editar anotações internas no modal de detalhes do lead com validação por tenant.
-- [ ] Validar as telas autenticadas Dashboard, Buscar Leads, Meu CRM e Configurações em desktop e mobile, com evidência de apresentação e navegação.
-- [ ] Verificar os fluxos de busca Google Places, repetição de histórico, Kanban, modal de lead e exportações através de testes de rota protegida.
+- [x] Validar as telas autenticadas Dashboard, Buscar Leads, Meu CRM e Configurações em desktop e mobile, com evidência de apresentação e navegação.
+- [x] Verificar os fluxos de busca Google Places, repetição de histórico, Kanban, modal de lead e exportações através de testes de rota protegida.
 - [x] Cobrir em testes a repetição e listagem de histórico de buscas por tenant.
 - [x] Cobrir em testes os detalhes, notas e contactos do modal de lead por tenant.
+- [x] Criar uma pré-visualização de desenvolvimento sem leads artificiais para validar visualmente as telas autenticadas antes da entrega, identificada com um utilizador técnico não persistido.
+- [x] Registar evidência de navegação autenticada por sidebar/menu e das interações Kanban, modal e exportação através de testes de interface e rotas protegidas.
+- [x] Adicionar testes de interface para controlos de exportação, ações do detalhe de lead e movimentação do Kanban.
+- [x] Criar um teste integrado do painel autenticado para navegação, modal, exportação e movimento do Kanban sem persistir dados de teste.
