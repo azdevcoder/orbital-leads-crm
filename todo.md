@@ -1,0 +1,27 @@
+# Project TODO
+
+- [x] Definir modelos de dados para utilizadores, leads, notas, contactos e histórico de buscas com relações por tenant e sessões JWT sem estado.
+- [x] Implementar autenticação por email e palavra-passe com hash bcrypt e sessão JWT segura.
+- [x] Aplicar isolamento obrigatório por tenant em todas as operações de leitura, escrita, pesquisa e exportação de leads.
+- [x] Criar configurações de perfil e fluxo de alteração de palavra-passe.
+- [x] Integrar pesquisa Google Places com os campos Segmento/Nicho, Cidade e Estado (UF).
+- [x] Normalizar e persistir os campos Nome, Telefone, Endereço completo, Website, Avaliação e Status retornados pelo Google Places.
+- [x] Guardar histórico de buscas por utilizador e permitir repetir buscas com um clique.
+- [x] Implementar lista de leads com pesquisa rápida e filtros por status, segmento e cidade.
+- [x] Implementar pipeline Kanban com as colunas Novo, Contatado, Em Negociação, Fechado e Perdido.
+- [x] Implementar drag and drop de leads no Kanban com SortableJS e actualizar o status com segurança por tenant.
+- [x] Criar modal de detalhes para notas, histórico de contactos, alteração de status e acção WhatsApp através de wa.me.
+- [x] Implementar exportação no backend para CSV com json2csv e XLSX com exceljs, respeitando filtros e tenant.
+- [x] Construir dashboard com métricas de leads e gráfico de distribuição por status em Chart.js.
+- [x] Aplicar navegação responsiva com os itens Dashboard, Buscar Leads, Meu CRM e Configurações.
+- [x] Criar uma linguagem visual cósmica imersiva e acessível, com gradientes, estrelas, nebulosas, orbs e brilho ciano.
+- [x] Escrever testes unitários para autenticação, isolamento de tenant, mudança de status e filtros de exportação.
+- [ ] Validar o comportamento da API, as interacções principais, a apresentação desktop e mobile e corrigir falhas encontradas.
+- [ ] Guardar uma versão validada do projecto e entregar a aplicação com as instruções de configuração.
+- [x] Substituir o encaminhamento OAuth do template pela experiência de registo e login local em todas as telas principais.
+- [x] Adicionar estados de erro explícitos e ações de repetição para métricas, histórico, lista/Kanban e detalhes de leads.
+- [x] Permitir editar anotações internas no modal de detalhes do lead com validação por tenant.
+- [ ] Validar as telas autenticadas Dashboard, Buscar Leads, Meu CRM e Configurações em desktop e mobile, com evidência de apresentação e navegação.
+- [ ] Verificar os fluxos de busca Google Places, repetição de histórico, Kanban, modal de lead e exportações através de testes de rota protegida.
+- [x] Cobrir em testes a repetição e listagem de histórico de buscas por tenant.
+- [x] Cobrir em testes os detalhes, notas e contactos do modal de lead por tenant.
