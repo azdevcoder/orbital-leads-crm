@@ -1,14 +1,15 @@
 import {
-  decimal,
   index,
-  int,
-  mysqlEnum,
-  mysqlTable,
+  integer,
+  numeric,
+  pgEnum,
+  pgTable,
+  serial,
   text,
   timestamp,
   uniqueIndex,
   varchar,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/pg-core";
 
 export const PIPELINE_STATUSES = [
   "Novo",
@@ -19,42 +20,41 @@ export const PIPELINE_STATUSES = [
 ] as const;
 
 export type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
+export const pipelineStatusEnum = pgEnum("pipeline_status", PIPELINE_STATUSES);
+export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
-/**
- * Cada utilizador representa o seu próprio tenant. O openId permanece como o
- * identificador de sessão e permite a compatibilidade com o middleware da aplicação.
- */
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
+/** Cada utilizador é um tenant independente da aplicação. */
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   openId: varchar("openId", { length: 128 }).notNull().unique(),
   name: varchar("name", { length: 160 }),
   email: varchar("email", { length: 320 }).unique(),
   passwordHash: varchar("passwordHash", { length: 255 }),
   loginMethod: varchar("loginMethod", { length: 64 }).default("email"),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: userRoleEnum("role").default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
-export const leads = mysqlTable(
+export const leads = pgTable(
   "leads",
   {
-    id: int("id").autoincrement().primaryKey(),
+    id: serial("id").primaryKey(),
     tenantId: varchar("tenantId", { length: 128 }).notNull(),
     placeId: varchar("placeId", { length: 255 }),
     name: varchar("name", { length: 255 }).notNull(),
     phone: varchar("phone", { length: 64 }),
     fullAddress: text("fullAddress"),
     website: varchar("website", { length: 512 }),
-    rating: decimal("rating", { precision: 3, scale: 1 }),
+    rating: numeric("rating", { precision: 3, scale: 1 }),
     businessStatus: varchar("businessStatus", { length: 32 }).default("Aberto").notNull(),
-    status: mysqlEnum("status", PIPELINE_STATUSES).default("Novo").notNull(),
+    status: pipelineStatusEnum("status").default("Novo").notNull(),
     segment: varchar("segment", { length: 160 }).notNull(),
     city: varchar("city", { length: 160 }).notNull(),
     state: varchar("state", { length: 8 }).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },
   table => [
     index("leads_tenant_idx").on(table.tenantId),
@@ -64,25 +64,25 @@ export const leads = mysqlTable(
   ]
 );
 
-export const leadNotes = mysqlTable(
+export const leadNotes = pgTable(
   "lead_notes",
   {
-    id: int("id").autoincrement().primaryKey(),
+    id: serial("id").primaryKey(),
     tenantId: varchar("tenantId", { length: 128 }).notNull(),
-    leadId: int("leadId").notNull(),
+    leadId: integer("leadId").notNull(),
     content: text("content").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },
   table => [index("lead_notes_tenant_lead_idx").on(table.tenantId, table.leadId)]
 );
 
-export const contactLogs = mysqlTable(
+export const contactLogs = pgTable(
   "contact_logs",
   {
-    id: int("id").autoincrement().primaryKey(),
+    id: serial("id").primaryKey(),
     tenantId: varchar("tenantId", { length: 128 }).notNull(),
-    leadId: int("leadId").notNull(),
+    leadId: integer("leadId").notNull(),
     channel: varchar("channel", { length: 48 }).notNull(),
     details: text("details"),
     contactedAt: timestamp("contactedAt").defaultNow().notNull(),
@@ -90,15 +90,15 @@ export const contactLogs = mysqlTable(
   table => [index("contact_logs_tenant_lead_idx").on(table.tenantId, table.leadId)]
 );
 
-export const searches = mysqlTable(
+export const searches = pgTable(
   "searches",
   {
-    id: int("id").autoincrement().primaryKey(),
+    id: serial("id").primaryKey(),
     tenantId: varchar("tenantId", { length: 128 }).notNull(),
     segment: varchar("segment", { length: 160 }).notNull(),
     city: varchar("city", { length: 160 }).notNull(),
     state: varchar("state", { length: 8 }).notNull(),
-    resultCount: int("resultCount").default(0).notNull(),
+    resultCount: integer("resultCount").default(0).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => [index("searches_tenant_created_idx").on(table.tenantId, table.createdAt)]

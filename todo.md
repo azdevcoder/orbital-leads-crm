@@ -29,3 +29,10 @@
 - [x] Registar evidência de navegação autenticada por sidebar/menu e das interações Kanban, modal e exportação através de testes de interface e rotas protegidas.
 - [x] Adicionar testes de interface para controlos de exportação, ações do detalhe de lead e movimentação do Kanban.
 - [x] Criar um teste integrado do painel autenticado para navegação, modal, exportação e movimento do Kanban sem persistir dados de teste.
+- [ ] Avaliar a compatibilidade do runtime, autenticação, base de dados e Google Places para implantação fora da plataforma atual.
+- [x] Criar um repositório GitHub privado e enviar o código versionado do Mini CRM.
+- [ ] Preparar documentação, comandos e variáveis de ambiente para publicação no Render.
+- [ ] Configurar o Web Service e a base de dados no Render a partir do repositório GitHub.
+- [ ] Validar a aplicação publicada no Render e registar a URL externa.
+- [ ] Migrar o adaptador Drizzle de MySQL para PostgreSQL gerido no Render, incluindo esquema e migrações.
+- [ ] Substituir o proxy interno de Google Places por chamadas diretas protegidas por GOOGLE_MAPS_API_KEY no servidor Render.

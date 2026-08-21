@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
 import {
   contactLogs,
   leads,
@@ -13,6 +14,7 @@ import {
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: Pool | null = null;
 
 export type LeadFilters = {
   status?: PipelineStatus;
@@ -38,7 +40,8 @@ export type CapturedLead = {
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      _db = drizzle(_pool);
     } catch (error) {
       console.warn("[Database] Failed to initialize:", error);
       _db = null;
@@ -214,7 +217,8 @@ export async function upsertCapturedLeads(tenantId: string, captured: CapturedLe
         city: item.city,
         state: item.state,
       })
-      .onDuplicateKeyUpdate({
+      .onConflictDoUpdate({
+        target: [leads.tenantId, leads.placeId],
         set: {
           name: item.name,
           phone: item.phone ?? null,
