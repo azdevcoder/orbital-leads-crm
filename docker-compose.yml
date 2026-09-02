@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: orbital-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: orbital_leads
+      POSTGRES_PASSWORD: orbital_leads_pwd
+      POSTGRES_DB: orbital_leads
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orbital_leads -d orbital_leads"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: orbital-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # fallback se .env não tiver DATABASE_URL (usa serviço db)
+      DATABASE_URL: postgres://orbital_leads:orbital_leads_pwd@db:5432/orbital_leads
+      NODE_ENV: production
+      PORT: 3000
+    command: sh -c "npx drizzle-kit migrate && node dist/index.js"
+
+volumes:
+  pgdata:
