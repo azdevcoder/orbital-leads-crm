@@ -12,10 +12,8 @@ jobs:
     steps:
       - name: Ping Render (keep free tier awake)
         run: |
+          set +x
           URL="https://orbital-leads-crm.onrender.com/"
-          echo "Pinging $URL at $(date -u)"
-          # -fsS falha silencioso em erro, --retry tenta 2x, timeout 15s
-          curl -fsS --retry 2 --max-time 15 "$URL" > /dev/null
-          echo "✓ Render awake (200)"
-          # opcional: ping API também
-          curl -fsS --max-time 10 "$URL/api/trpc" || echo "api check skip (expected)"
+          echo "Ping $URL $(date -u)"
+          curl -fsS --retry 2 --max-time 20 "$URL" -o /dev/null -w "HTTP %{http_code} %{size_download}b in %{time_total}s\n"
+          echo "ok"
