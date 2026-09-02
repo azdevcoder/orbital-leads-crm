@@ -1,0 +1,21 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" # a cada 10 minutos (UTC)
+  workflow_dispatch: # permite rodar manualmente em Actions → Run workflow
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping Render (keep free tier awake)
+        run: |
+          URL="https://orbital-leads-crm.onrender.com/"
+          echo "Pinging $URL at $(date -u)"
+          # -fsS falha silencioso em erro, --retry tenta 2x, timeout 15s
+          curl -fsS --retry 2 --max-time 15 "$URL" > /dev/null
+          echo "✓ Render awake (200)"
+          # opcional: ping API também
+          curl -fsS --max-time 10 "$URL/api/trpc" || echo "api check skip (expected)"
