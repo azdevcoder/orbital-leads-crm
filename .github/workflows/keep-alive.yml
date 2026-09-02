@@ -15,5 +15,5 @@ jobs:
           set +x
           URL="https://orbital-leads-crm.onrender.com/"
           echo "Ping $URL $(date -u)"
-          curl -fsS --retry 2 --max-time 20 "$URL" -o /dev/null -w "HTTP %{http_code} %{size_download}b in %{time_total}s\n"
+          curl -fsS --retry 2 --max-time 14 "$URL" -o /dev/null -w "HTTP %{http_code} %{size_download}b in %{time_total}s\n"
           echo "ok"
