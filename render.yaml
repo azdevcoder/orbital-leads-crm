@@ -5,8 +5,7 @@ services:
     region: frankfurt
     plan: free
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    preDeployCommand: pnpm drizzle-kit migrate
-    startCommand: pnpm start
+    startCommand: pnpm drizzle-kit migrate && pnpm start
     healthCheckPath: /
     autoDeployTrigger: commit
     envVars:
