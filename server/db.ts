@@ -40,7 +40,13 @@ export type CapturedLead = {
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const url = process.env.DATABASE_URL;
+      // Render Postgres (e externas) exige SSL; local nem sempre.
+      const needsSSL = url.includes("render.com") || url.includes("sslmode=require") || process.env.NODE_ENV === "production";
+      _pool = new Pool({
+        connectionString: url,
+        ...(needsSSL ? { ssl: { rejectUnauthorized: false } } : {}),
+      });
       _db = drizzle(_pool);
     } catch (error) {
       console.warn("[Database] Failed to initialize:", error);
