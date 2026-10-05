@@ -35,6 +35,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .cosmic-primary:active:not(:disabled) { transform: scale(.97); }
 .subtle-btn { display: inline-flex; align-items: center; gap: 7px; color: #dbe2ff !important; border: 1px solid var(--line) !important; background: rgba(255,255,255,.045) !important; font-weight: 700; }
 .subtle-btn:hover { border-color: rgba(85,236,255,.55) !important; background: rgba(85,236,255,.09) !important; }
+a.btn { text-decoration: none; }
 
 .auth-shell { position: relative; display: grid; grid-template-columns: minmax(0,1.18fr) minmax(400px,.82fr); min-height: 100vh; overflow: hidden; background: radial-gradient(circle at 24% 18%, rgba(104,80,214,.31), transparent 30%), radial-gradient(circle at 84% 84%, rgba(30,182,211,.17), transparent 25%), linear-gradient(135deg, #080a22 0%, #100d38 50%, #070918 100%); }
 .auth-shell::before, .app-shell::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .7; background-image: radial-gradient(circle at 15% 29%, #fff 0 1px, transparent 1.5px), radial-gradient(circle at 76% 22%, #b9d6ff 0 1px, transparent 1.5px), radial-gradient(circle at 56% 75%, #fff 0 .8px, transparent 1.4px), radial-gradient(circle at 28% 86%, #c0a7ff 0 .8px, transparent 1.4px); background-size: 155px 165px, 210px 190px, 136px 146px, 245px 220px; }

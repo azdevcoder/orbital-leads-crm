@@ -210,7 +210,7 @@ function downloadFromBase64(data: { filename: string; mimeType: string; base64: 
 
 const planOrder: PlanId[] = ["free", "start", "plus", "scale"];
 
-function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
+function SalesPage() {
   const checkout = trpc.cakto.checkout.useMutation({
     onSuccess: data => { window.location.href = data.url; },
     onError: error => toast.error(error.message),
@@ -220,14 +220,14 @@ function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: (
       <div className="cosmic-backdrop" aria-hidden="true"><span className="nebula nebula-one" /><span className="nebula nebula-two" /></div>
       <header className="sales-topbar">
         <div className="brand-lockup"><div className="brand-mark"><Rocket size={19} /></div><span>ORBITAL<span>LEADS</span></span></div>
-        <div className="sales-top-actions"><button className="btn subtle-btn" onClick={onLogin}>Entrar</button><button className="btn cosmic-primary" onClick={onRegister}>Criar conta grátis</button></div>
+        <div className="sales-top-actions"><a className="btn subtle-btn" href="/login.html">Entrar</a><a className="btn cosmic-primary" href="/login.html?modo=registro">Criar conta grátis</a></div>
       </header>
 
       <section className="sales-hero">
         <p className="eyebrow"><Sparkles size={15} /> PROSPECÇÃO B2B EM ÓRBITA</p>
         <h1>Encontre empresas, organize no <em>Kanban</em> e chame no <em>WhatsApp.</em></h1>
         <p>O Orbital Leads captura empresas do Google com telefone, endereço, website e avaliação — e coloca cada oportunidade num pipeline visual com redirecionamento direto para o WhatsApp.</p>
-        <div className="sales-cta-row"><button className="btn cosmic-primary" onClick={onRegister}><Rocket size={17} /> Começar grátis</button><button className="btn subtle-btn" onClick={onLogin}>Já tenho conta</button></div>
+        <div className="sales-cta-row"><a className="btn cosmic-primary" href="/login.html?modo=registro"><Rocket size={17} /> Começar grátis</a><a className="btn subtle-btn" href="/login.html">Já tenho conta</a></div>
         <p className="sales-guarantee"><Check size={14} /> Sem cartão de crédito · Cancele quando quiser</p>
       </section>
 
@@ -258,7 +258,11 @@ function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: (
                 <p className="plan-tagline">{plan.tagline}</p>
                 {planEconomics(plan) && <p className="plan-econ">{planEconomics(plan)}</p>}
                 <ul>{plan.features.map(item => <li key={item}><Check size={14} /> {item}</li>)}</ul>
-                <button className={`btn ${highlight ? "cosmic-primary" : "subtle-btn"}`} disabled={checkout.isPending} onClick={() => plan.price === 0 ? onRegister() : checkout.mutate({ plan: planId })}>{checkout.isPending ? <Loader2 className="spin" size={16} /> : plan.price === 0 ? "Criar conta grátis" : `Assinar ${plan.name}`}</button>
+                {plan.price === 0 ? (
+                  <a className={`btn ${highlight ? "cosmic-primary" : "subtle-btn"}`} href="/login.html?modo=registro">Criar conta grátis</a>
+                ) : (
+                  <button className={`btn ${highlight ? "cosmic-primary" : "subtle-btn"}`} disabled={checkout.isPending} onClick={() => checkout.mutate({ plan: planId })}>{checkout.isPending ? <Loader2 className="spin" size={16} /> : `Assinar ${plan.name}`}</button>
+                )}
               </article>
             );
           })}
@@ -266,20 +270,16 @@ function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: (
         <p className="form-hint"><Sparkles size={14} /> Contas e upgrades de plano são ativados pelo time Orbital após a confirmação do pagamento.</p>
       </section>
 
-      <footer className="sales-footer"><span>ORBITAL LEADS · Prospecção B2B em órbita</span><button className="link-btn" onClick={onLogin}>Entrar na plataforma</button></footer>
+      <footer className="sales-footer"><span>ORBITAL LEADS · Prospecção B2B em órbita</span><a className="link-btn" href="/login.html">Entrar na plataforma</a></footer>
     </main>
   );
 }
 
-function ClaimAccessPage({ token, onAuthenticated }: { token: string; onAuthenticated: (user: CurrentUser) => void }) {
+function ClaimAccessPage({ token }: { token: string }) {
   const [password, setPassword] = useState("");
   const infoQuery = trpc.cakto.claimInfo.useQuery({ token });
   const claim = trpc.auth.claimAccess.useMutation({
-    onSuccess: user => {
-      window.history.replaceState({}, "", window.location.pathname);
-      onAuthenticated(user);
-      toast.success("Acesso ativado. Bem-vindo à órbita!");
-    },
+    onSuccess: () => { window.location.href = "/painel.html"; },
     onError: error => toast.error(error.message),
   });
 
@@ -314,7 +314,7 @@ function ClaimAccessPage({ token, onAuthenticated }: { token: string; onAuthenti
   );
 }
 
-function AuthPage({ onAuthenticated, initialMode = "login", onShowPlans }: { onAuthenticated: (user: CurrentUser) => void; initialMode?: "login" | "register"; onShowPlans?: () => void }) {
+function AuthPage({ onAuthenticated, initialMode = "login" }: { onAuthenticated: (user: CurrentUser) => void; initialMode?: "login" | "register" }) {
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -381,7 +381,7 @@ function AuthPage({ onAuthenticated, initialMode = "login", onShowPlans }: { onA
             </button>
           </form>
           <p className="auth-note"><LockKeyhole size={14} /> Credenciais protegidas por hash bcrypt e sessão JWT.</p>
-          {onShowPlans && <p className="auth-note"><button className="link-btn" type="button" onClick={onShowPlans}>← Voltar aos planos</button></p>}
+          <p className="auth-note"><a className="link-btn" href="/">← Voltar aos planos</a></p>
         </div>
       </section>
     </main>
@@ -649,18 +649,48 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
 function App() {
   const utils = trpc.useUtils();
   const meQuery = trpc.auth.me.useQuery();
-  const [authScreen, setAuthScreen] = useState<"plans" | "login" | "register">("plans");
   const logout = trpc.auth.logout.useMutation({
     onSuccess: async () => { utils.auth.me.setData(undefined, null); await utils.auth.me.invalidate(); },
   });
 
-  if (meQuery.isLoading) return <div className="initial-loader"><Rocket size={28} /><span>Preparar centro de comando...</span></div>;
-  const requestedPreview = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("preview") : null;
+  const pathname = window.location.pathname;
+  const searchParams = new URLSearchParams(window.location.search);
+  const requestedPreview = import.meta.env.DEV ? searchParams.get("preview") : null;
   const previewView = navItems.some(item => item.view === requestedPreview) ? requestedPreview as ActiveView : null;
+  const activateToken = searchParams.get("ativar");
+  const loginInitial = searchParams.get("modo") === "registro" ? "register" : "login";
+  const isPanelPath = pathname === "/painel.html" || pathname === "/painel";
+
+  useEffect(() => {
+    if (meQuery.isLoading || previewView) return;
+    if (meQuery.data) {
+      if (!isPanelPath && !activateToken) window.location.replace("/painel.html");
+    } else if (isPanelPath && !activateToken) {
+      window.location.replace("/login.html");
+    }
+  }, [meQuery.isLoading, meQuery.data, previewView, isPanelPath, activateToken]);
+
+  if (meQuery.isLoading) return <div className="initial-loader"><Rocket size={28} /><span>Preparar centro de comando...</span></div>;
   const previewUser: CurrentUser = { id: 0, name: "Pré-visualização", email: "preview@local.dev", phone: null, role: "user", plan: "scale" };
-  const authenticate = (user: CurrentUser) => { utils.auth.me.setData(undefined, user); };
-  const activateToken = new URLSearchParams(window.location.search).get("ativar");
-  return <><Toaster richColors position="top-right" theme="dark" />{meQuery.data ? <AppShell user={meQuery.data} onLogout={() => logout.mutate()} /> : previewView ? <AppShell user={previewUser} initialView={previewView} onLogout={() => { window.location.href = "/"; }} /> : activateToken ? <ClaimAccessPage token={activateToken} onAuthenticated={authenticate} /> : authScreen === "plans" ? <SalesPage onLogin={() => setAuthScreen("login")} onRegister={() => setAuthScreen("register")} /> : <AuthPage initialMode={authScreen} onShowPlans={() => setAuthScreen("plans")} onAuthenticated={authenticate} />}</>;
+  const authenticate = (user: CurrentUser) => {
+    utils.auth.me.setData(undefined, user);
+    window.location.href = "/painel.html";
+  };
+  return (
+    <><Toaster richColors position="top-right" theme="dark" />{meQuery.data ? (
+      isPanelPath || previewView ? <AppShell user={meQuery.data} onLogout={() => logout.mutate(undefined, { onSettled: () => { window.location.href = "/"; } })} /> : <div className="initial-loader"><Rocket size={28} /><span>A abrir o painel...</span></div>
+    ) : previewView ? (
+      <AppShell user={previewUser} initialView={previewView} onLogout={() => { window.location.href = "/"; }} />
+    ) : activateToken ? (
+      <ClaimAccessPage token={activateToken} />
+    ) : isPanelPath ? (
+      <div className="initial-loader"><Rocket size={28} /><span>A abrir o login...</span></div>
+    ) : pathname === "/login.html" || pathname === "/login" ? (
+      <AuthPage initialMode={loginInitial} onAuthenticated={authenticate} />
+    ) : (
+      <SalesPage />
+    )}</>
+  );
 }
 
 export default App;
