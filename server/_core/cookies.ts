@@ -39,10 +39,14 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  // SameSite=None exige Secure — navegadores descartam `SameSite=None` sem
+  // `Secure`. Em HTTP local (sem TLS) usa Lax, suficiente por ser same-origin.
+  const secure = isSecureRequest(req);
+
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    sameSite: secure ? "none" : "lax",
+    secure,
   };
 }

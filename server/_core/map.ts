@@ -202,6 +202,55 @@ export type PlaceDetailsResult = {
   status: string;
 };
 
+export type PlacesNewSearchResponse = {
+  places?: Array<{
+    id: string;
+    displayName?: { text: string };
+    formattedAddress?: string;
+    rating?: number;
+    userRatingCount?: number;
+    businessStatus?: string;
+    websiteUri?: string;
+    nationalPhoneNumber?: string;
+    internationalPhoneNumber?: string;
+  }>;
+};
+
+/**
+ * PLACES API (NEW) - Text Search.
+ * A API legada (/maps/api/place/textsearch) está desativada para projetos
+ * novos — este projeto usa Places API (New), já ativada em places.googleapis.com.
+ * O searchText já devolve telefone/website (field mask), dispensando details.
+ */
+export async function searchPlacesNew(
+  textQuery: string,
+  maxResultCount = 20
+): Promise<PlacesNewSearchResponse> {
+  const { apiKey } = getMapsConfig();
+
+  const response = await fetch(
+    "https://places.googleapis.com/v1/places:searchText",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask":
+          "places.id,places.displayName,places.formattedAddress,places.rating,places.businessStatus,places.websiteUri,places.nationalPhoneNumber,places.internationalPhoneNumber",
+      },
+      body: JSON.stringify({ textQuery, maxResultCount, languageCode: "pt" }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Places API (New) request failed (${response.status} ${response.statusText}): ${errorText}`
+    );
+  }
+
+  return (await response.json()) as PlacesNewSearchResponse;
+}
 export type ElevationResult = {
   results: Array<{
     elevation: number;

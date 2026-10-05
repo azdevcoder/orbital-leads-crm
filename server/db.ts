@@ -41,8 +41,11 @@ export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
       const url = process.env.DATABASE_URL;
-      // Render Postgres (e externas) exige SSL; local nem sempre.
-      const needsSSL = url.includes("render.com") || url.includes("sslmode=require") || process.env.NODE_ENV === "production";
+      // Render Postgres (e externas) exige SSL; local (docker-compose/produção local) usa plaintext.
+      // Só ativa SSL quando a URL indica (render.com ou sslmode=require) e nunca com sslmode=disable.
+      const needsSSL =
+        (url.includes("render.com") || url.includes("sslmode=require")) &&
+        !url.includes("sslmode=disable");
       _pool = new Pool({
         connectionString: url,
         ...(needsSSL ? { ssl: { rejectUnauthorized: false } } : {}),

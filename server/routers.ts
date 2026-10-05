@@ -7,7 +7,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { PIPELINE_STATUSES, type PipelineStatus } from "../drizzle/schema";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { makeRequest, type PlaceDetailsResult, type PlacesSearchResult } from "./_core/map";
+import { searchPlacesNew } from "./_core/map";
 import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -50,50 +50,20 @@ async function searchAndCapture(input: {
   state: string;
 }) {
   const query = `${input.segment} em ${input.city}, ${input.state}`;
-  const search = await makeRequest<PlacesSearchResult>(
-    "/maps/api/place/textsearch/json",
-    { query }
-  );
-  const candidates = search.results.slice(0, 20);
-  const details = await Promise.all(
-    candidates.map(async place => {
-      try {
-        const response = await makeRequest<PlaceDetailsResult>(
-          "/maps/api/place/details/json",
-          {
-            place_id: place.place_id,
-            fields: "place_id,name,formatted_address,formatted_phone_number,international_phone_number,website,rating,opening_hours",
-          }
-        );
-        const result = response.result;
-        return {
-          placeId: result.place_id || place.place_id,
-          name: result.name || place.name,
-          phone: result.international_phone_number ?? result.formatted_phone_number ?? null,
-          fullAddress: result.formatted_address ?? place.formatted_address ?? null,
-          website: result.website ?? null,
-          rating: result.rating ?? place.rating ?? null,
-          businessStatus: translateBusinessStatus(result.opening_hours?.open_now, place.business_status),
-          segment: input.segment,
-          city: input.city,
-          state: input.state,
-        };
-      } catch {
-        return {
-          placeId: place.place_id,
-          name: place.name,
-          phone: null,
-          fullAddress: place.formatted_address ?? null,
-          website: null,
-          rating: place.rating ?? null,
-          businessStatus: translateBusinessStatus(undefined, place.business_status),
-          segment: input.segment,
-          city: input.city,
-          state: input.state,
-        };
-      }
-    })
-  );
+  // Places API (New): o searchText já devolve telefone/website na field mask.
+  const search = await searchPlacesNew(query, 20);
+  const details = (search.places ?? []).map(place => ({
+    placeId: place.id,
+    name: place.displayName?.text || "Sem nome",
+    phone: place.internationalPhoneNumber ?? place.nationalPhoneNumber ?? null,
+    fullAddress: place.formattedAddress ?? null,
+    website: place.websiteUri ?? null,
+    rating: place.rating ?? null,
+    businessStatus: translateBusinessStatus(undefined, place.businessStatus),
+    segment: input.segment,
+    city: input.city,
+    state: input.state,
+  }));
 
   const saved = await db.upsertCapturedLeads(input.tenantId, details);
   await db.createSearchHistory({ ...input, resultCount: saved });

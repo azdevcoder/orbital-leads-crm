@@ -249,8 +249,18 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
     onError: error => toast.error(error.message),
   });
   const statusMutation = trpc.leads.updateStatus.useMutation({
+    onMutate: async input => {
+      // Move otimista: o React redesenha o card na coluna nova de imediato.
+      await utils.leads.list.cancel().catch(() => undefined);
+      const previous = utils.leads.list.getData(filters);
+      utils.leads.list.setData(filters, old => old?.map(lead => lead.id === input.leadId ? { ...lead, status: input.status } : lead));
+      return { previous };
+    },
+    onError: (error, _input, context) => {
+      if (context?.previous) utils.leads.list.setData(filters, context.previous);
+      toast.error(error.message);
+    },
     onSuccess: async () => { await utils.leads.list.invalidate(); await utils.leads.metrics.invalidate(); await utils.leads.details.invalidate(); },
-    onError: error => toast.error(error.message),
   });
   const noteMutation = trpc.leads.addNote.useMutation({
     onSuccess: async () => { setNewNote(""); await utils.leads.details.invalidate(); toast.success("Nota adicionada ao lead."); },
@@ -288,9 +298,25 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
         ghostClass: "lead-ghost",
         dragClass: "lead-dragging",
         onEnd: event => {
-          const leadId = Number((event.item as HTMLElement).dataset.leadId);
-          const nextStatus = event.to.dataset.status as PipelineStatus | undefined;
-          applyKanbanMove({ leadId, fromStatus: event.from.dataset.status, nextStatus, onMove: (id, status) => statusMutation.mutate({ leadId: id, status }) });
+          const item = event.item as HTMLElement | undefined;
+          const from = event.from as unknown as HTMLElement | undefined;
+          const to = event.to as unknown as HTMLElement | undefined;
+          // Reverte a mutação do SortableJS: o React é o dono do DOM e
+          // redesenha as colunas a partir do estado (otimista + servidor).
+          // Sem isto, o React tenta remover um nó que já mudou de pai e a
+          // árvore inteira desmonta (ecrã em branco após arrastar).
+          try {
+            if (item && from && typeof event.oldIndex === "number") {
+              const ref = from.children[event.oldIndex] ?? null;
+              item.parentNode?.removeChild(item);
+              from.insertBefore(item, ref);
+            }
+          } catch {
+            // DOM incompleto (ex.: mocks); o próximo render corrige.
+          }
+          const leadId = Number(item?.dataset.leadId);
+          const nextStatus = to?.dataset.status as PipelineStatus | undefined;
+          applyKanbanMove({ leadId, fromStatus: from?.dataset.status, nextStatus, onMove: (id, status) => statusMutation.mutate({ leadId: id, status }) });
         },
       });
     });

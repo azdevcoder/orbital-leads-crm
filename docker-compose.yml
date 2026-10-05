@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: orbital_leads_pwd
       POSTGRES_DB: orbital_leads
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -25,7 +25,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "3100:3000"
     env_file:
       - .env
     environment:
