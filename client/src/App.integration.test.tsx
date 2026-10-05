@@ -58,6 +58,7 @@ describe("painel autenticado integrado", () => {
     expect(trpcMocks.contact.mutate).toHaveBeenCalledWith({ leadId: 31, channel: "WhatsApp", details: "Mensagem enviada" });
 
     type SortableCallbackOptions = { onEnd: (event: { item: { dataset: { leadId?: string } }; from: { dataset: { status?: string } }; to: { dataset: { status?: string } } }) => void };
+    await user.click(screen.getByRole("button", { name: "Kanban" }));
     const sortableCalls = (sortableMock.create as unknown as { mock: { calls: Array<[HTMLElement, SortableCallbackOptions]> } }).mock.calls;
     const kanbanCall = sortableCalls.find(([element]) => element.dataset.status === "Contatado");
     expect(kanbanCall).toBeTruthy();
