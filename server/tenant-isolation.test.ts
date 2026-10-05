@@ -74,4 +74,16 @@ describe("isolamento por tenant", () => {
     expect(result.filename).toMatch(/^leads-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(result.mimeType).toBe("text/csv;charset=utf-8");
   });
+
+  it("plano Start não move cards no Kanban nem exporta", async () => {
+    const startContext = (): TrpcContext => ({
+      ...tenantContext("tenant-start"),
+      user: { ...tenantContext("tenant-start").user, plan: "start" },
+    });
+    const caller = appRouter.createCaller(startContext());
+
+    await expect(caller.leads.updateStatus({ leadId: 42, status: "Fechado" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.leads.export({ format: "csv", filters: {} })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(dbMocks.updateLeadStatus).not.toHaveBeenCalled();
+  });
 });

@@ -54,7 +54,7 @@ describe("webhook Cakto", () => {
     vi.clearAllMocks();
     process.env.CAKTO_WEBHOOK_SECRET = "segredo-webhook";
     process.env.CAKTO_OFFER_START = "offer-start-1";
-    process.env.CAKTO_OFFER_GROWTH = "offer-growth-1";
+    process.env.CAKTO_OFFER_PLUS = "offer-plus-1";
     process.env.CAKTO_OFFER_SCALE = "offer-scale-1";
     dbMocks.getCaktoPaymentByOrderId.mockResolvedValue(undefined);
     dbMocks.confirmCaktoPayment.mockResolvedValue({ token: "tok-claim-123" });
@@ -67,7 +67,7 @@ describe("webhook Cakto", () => {
   });
 
   it("mapeia oferta ao plano por id e por preço", () => {
-    expect(planForOffer({ id: "offer-growth-1", price: 0 })?.valueOf()).toBe("growth");
+    expect(planForOffer({ id: "offer-plus-1", price: 0 })?.valueOf()).toBe("plus");
     expect(planForOffer({ id: "desconhecida", price: 99.9 })).toBe("scale");
     expect(planForOffer({ id: "desconhecida", price: 1 })).toBeNull();
     expect(planForOffer(null)).toBeNull();
@@ -113,7 +113,7 @@ describe("webhook Cakto", () => {
 
   it("refund rebaixa para o Grátis sem tocar no admin", async () => {
     dbMocks.getUserByEmail
-      .mockResolvedValueOnce({ openId: "local-x", email: "buyer@example.com", plan: "growth", role: "user" })
+      .mockResolvedValueOnce({ openId: "local-x", email: "buyer@example.com", plan: "plus", role: "user" })
       .mockResolvedValueOnce({ openId: "local-a", email: "admin@example.com", plan: "scale", role: "admin" });
 
     await handleCaktoWebhook("refund", paidOrder({ id: "order-2" }));
@@ -151,7 +151,7 @@ describe("resgate de acesso (claim)", () => {
       status: "paid",
       claimedAt: null,
       email: "buyer@example.com",
-      plan: "growth",
+      plan: "plus",
       customerName: "Compradora",
       customerPhone: "+55 19 99999-0000",
     });
@@ -160,16 +160,16 @@ describe("resgate de acesso (claim)", () => {
       phone: null, role: "user", plan: "free",
     }).mockResolvedValue({
       id: 21, openId: "local-21", name: "Compradora", email: "buyer@example.com",
-      phone: null, role: "user", plan: "growth",
+      phone: null, role: "user", plan: "plus",
     });
     sdkMocks.createSessionToken.mockResolvedValue("jwt-claim");
     const { ctx, cookies } = authedContext();
 
     const result = await appRouter.createCaller(ctx).auth.claimAccess({ token: "tok-claim-123", password: "novasenha123" });
 
-    expect(result).toEqual(expect.objectContaining({ email: "buyer@example.com", plan: "growth" }));
+    expect(result).toEqual(expect.objectContaining({ email: "buyer@example.com", plan: "plus" }));
     expect(dbMocks.setUserPasswordByEmail).toHaveBeenCalledWith("buyer@example.com", "hash-nova");
-    expect(dbMocks.setUserPlan).toHaveBeenCalledWith("local-21", "growth");
+    expect(dbMocks.setUserPlan).toHaveBeenCalledWith("local-21", "plus");
     expect(dbMocks.markCaktoPaymentClaimed).toHaveBeenCalledWith("tok-claim-123");
     expect(cookies).toEqual([{ name: COOKIE_NAME, value: "jwt-claim" }]);
   });

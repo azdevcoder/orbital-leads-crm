@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
-import { checkSearchQuota, PLAN_IDS, planOf, type PlanId } from "@shared/plans";
+import { checkSearchQuota, PLAN_IDS, planHasCrm, planHasExport, planOf, type PlanId } from "@shared/plans";
 import { PIPELINE_STATUSES, type PipelineStatus } from "../drizzle/schema";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -308,6 +308,9 @@ export const appRouter = router({
     updateStatus: protectedProcedure
       .input(z.object({ leadId: z.number().int().positive(), status: statusSchema }))
       .mutation(async ({ ctx, input }) => {
+        if (!planHasCrm(ctx.user.plan)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "O Kanban está disponível a partir do plano Plus." });
+        }
         const lead = await db.updateLeadStatus(ctx.user.openId, input.leadId, input.status as PipelineStatus);
         if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Lead não encontrado." });
         return lead;
@@ -358,6 +361,9 @@ export const appRouter = router({
     export: protectedProcedure
       .input(z.object({ format: z.enum(["csv", "xlsx"]), filters: leadFiltersSchema }))
       .mutation(async ({ ctx, input }) => {
+        if (!planHasExport(ctx.user.plan)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "A exportação está disponível a partir do plano Plus." });
+        }
         const result = await db.listLeads(ctx.user.openId, input.filters);
         const rows = makeExportRows(result);
         const stamp = new Date().toISOString().slice(0, 10);
@@ -434,12 +440,12 @@ export const appRouter = router({
   }),
   cakto: router({
     checkout: publicProcedure
-      .input(z.object({ plan: z.enum(["start", "growth", "scale"]) }))
+      .input(z.object({ plan: z.enum(["start", "plus", "scale"]) }))
       .mutation(async ({ input }) => {
         // Gera token opaco, regista a intenção e devolve o checkout com ?callback=token.
         const base = {
           start: process.env.CAKTO_CHECKOUT_START ?? "",
-          growth: process.env.CAKTO_CHECKOUT_GROWTH ?? "",
+          plus: process.env.CAKTO_CHECKOUT_PLUS ?? "",
           scale: process.env.CAKTO_CHECKOUT_SCALE ?? "",
         }[input.plan];
         if (!base) {

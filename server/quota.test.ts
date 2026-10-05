@@ -21,10 +21,24 @@ describe("catálogo de planos", () => {
   it("expõe os quatro planos com preços esperados", async () => {
     const { PLANS } = await import("../shared/plans");
     expect(PLANS.start.price).toBe(29.9);
-    expect(PLANS.growth.price).toBe(49.9);
+    expect(PLANS.plus.price).toBe(49.9);
     expect(PLANS.scale.price).toBe(99.9);
     expect(PLANS.start.searchesPerDay).toBe(50);
     expect(PLANS.start.leadsPerDay).toBe(1000);
+  });
+});
+
+describe("recursos por plano", () => {
+  it("Start tem só busca e lista; WhatsApp é Plus/Scale", async () => {
+    const { planHasCrm, planHasExport, planHasWhatsapp } = await import("../shared/plans");
+    expect(planHasCrm("start")).toBe(false);
+    expect(planHasExport("start")).toBe(false);
+    expect(planHasWhatsapp("start")).toBe(false);
+    expect(planHasCrm("free")).toBe(true);
+    expect(planHasExport("free")).toBe(true);
+    expect(planHasWhatsapp("free")).toBe(false);
+    expect(planHasWhatsapp("plus")).toBe(true);
+    expect(planHasCrm("scale")).toBe(true);
   });
 });
 

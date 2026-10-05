@@ -3,7 +3,7 @@
  * Partilhado entre servidor (fiscalização) e cliente (página de vendas, banners).
  */
 
-export const PLAN_IDS = ["free", "start", "growth", "scale"] as const;
+export const PLAN_IDS = ["free", "start", "plus", "scale"] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 
 export type PlanInfo = {
@@ -35,8 +35,7 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     features: [
       "1 busca com até 10 leads",
       "CRM completo com Kanban",
-      "Ação direta no WhatsApp",
-      "Conta criada pelo time Orbital",
+      "Exportação CSV e XLSX",
     ],
   },
   start: {
@@ -51,14 +50,12 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     features: [
       "Até 50 buscas por dia",
       "Até 1.000 leads por dia",
-      "CRM completo com Kanban",
-      "Ação direta no WhatsApp",
-      "Exportação CSV e XLSX",
+      "Lista de leads com filtros",
     ],
   },
-  growth: {
-    id: "growth",
-    name: "Growth",
+  plus: {
+    id: "plus",
+    name: "Plus",
     price: 49.9,
     tagline: "Para operações em escala",
     searchesPerDay: 100,
@@ -171,4 +168,18 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
 
 export function formatPrice(value: number): string {
   return value === 0 ? "Grátis" : `R$ ${value.toFixed(2).replace(".", ",")}`;
+}
+
+/** Recursos por plano: Start tem só busca + lista. */
+export function planHasCrm(plan: string | null | undefined): boolean {
+  return planOf(plan).id !== "start";
+}
+
+export function planHasExport(plan: string | null | undefined): boolean {
+  return planOf(plan).id !== "start";
+}
+
+export function planHasWhatsapp(plan: string | null | undefined): boolean {
+  const id = planOf(plan).id;
+  return id === "plus" || id === "scale";
 }

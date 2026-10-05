@@ -43,11 +43,11 @@ export function isValidCaktoSecret(received: unknown): boolean {
 export function planForOffer(offer: CaktoOrderData["offer"]): PlanId | null {
   const byId: Record<string, PlanId> = {};
   if (process.env.CAKTO_OFFER_START) byId[process.env.CAKTO_OFFER_START] = "start";
-  if (process.env.CAKTO_OFFER_GROWTH) byId[process.env.CAKTO_OFFER_GROWTH] = "growth";
+  if (process.env.CAKTO_OFFER_PLUS) byId[process.env.CAKTO_OFFER_PLUS] = "plus";
   if (process.env.CAKTO_OFFER_SCALE) byId[process.env.CAKTO_OFFER_SCALE] = "scale";
   if (offer?.id && byId[offer.id]) return byId[offer.id];
   if (offer?.price === 29.9) return "start";
-  if (offer?.price === 49.9) return "growth";
+  if (offer?.price === 49.9) return "plus";
   if (offer?.price === 99.9) return "scale";
   return null;
 }
