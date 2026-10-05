@@ -116,6 +116,14 @@ function AdminPanel() {
     onSuccess: async () => { await utils.admin.listUsers.invalidate(); toast.success("Plano atualizado."); },
     onError: error => toast.error(error.message),
   });
+  const [tempPasswords, setTempPasswords] = useState<Record<string, string>>({});
+  const resetPassword = trpc.admin.resetPassword.useMutation({
+    onSuccess: (data, input) => {
+      setTempPasswords(current => ({ ...current, [input.openId]: data.tempPassword }));
+      toast.success("Senha temporária gerada. Repasse ao cliente.");
+    },
+    onError: error => toast.error(error.message),
+  });
 
   return (
     <section className="admin-page">
@@ -136,7 +144,7 @@ function AdminPanel() {
         <div className="lead-table-wrap">
           {usersQuery.isLoading ? <LoadingLine /> : usersQuery.isError ? <QueryError text="Não foi possível carregar os usuários." onRetry={() => usersQuery.refetch()} /> : (
             <table className="lead-table admin-table">
-              <thead><tr><th>Nome</th><th>Contato</th><th>Plano</th><th>Buscas hoje</th><th>Leads hoje</th><th>Total buscas</th><th>Desde</th></tr></thead>
+              <thead><tr><th>Nome</th><th>Contato</th><th>Plano</th><th>Buscas hoje</th><th>Leads hoje</th><th>Total buscas</th><th>Desde</th><th>Acesso</th></tr></thead>
               <tbody>
                 {(usersQuery.data as AdminUserRow[] | undefined)?.map(account => (
                   <tr key={account.openId}>
@@ -151,6 +159,13 @@ function AdminPanel() {
                     <td>{account.dailyLeads}</td>
                     <td>{account.totalSearches}</td>
                     <td><small>{formatDate(account.createdAt)}</small></td>
+                    <td>
+                      {tempPasswords[account.openId] ? (
+                        <code className="temp-password">{tempPasswords[account.openId]}</code>
+                      ) : (
+                        <button className="link-btn" disabled={resetPassword.isPending} onClick={() => resetPassword.mutate({ openId: account.openId })} title="Gerar senha temporária">Nova senha</button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -196,6 +211,10 @@ function downloadFromBase64(data: { filename: string; mimeType: string; base64: 
 const planOrder: PlanId[] = ["free", "start", "growth", "scale"];
 
 function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
+  const checkout = trpc.cakto.checkout.useMutation({
+    onSuccess: data => { window.location.href = data.url; },
+    onError: error => toast.error(error.message),
+  });
   return (
     <main className="sales-page">
       <div className="cosmic-backdrop" aria-hidden="true"><span className="nebula nebula-one" /><span className="nebula nebula-two" /></div>
@@ -238,7 +257,7 @@ function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: (
                 <p className="plan-price">{formatPrice(plan.price)}{plan.price > 0 && <small>/mês</small>}</p>
                 <p className="plan-tagline">{plan.tagline}</p>
                 <ul>{plan.features.map(item => <li key={item}><Check size={14} /> {item}</li>)}</ul>
-                <button className={`btn ${highlight ? "cosmic-primary" : "subtle-btn"}`} onClick={onRegister}>{plan.price === 0 ? "Criar conta grátis" : `Assinar ${plan.name}`}</button>
+                <button className={`btn ${highlight ? "cosmic-primary" : "subtle-btn"}`} disabled={checkout.isPending} onClick={() => plan.price === 0 ? onRegister() : checkout.mutate({ plan: planId })}>{checkout.isPending ? <Loader2 className="spin" size={16} /> : plan.price === 0 ? "Criar conta grátis" : `Assinar ${plan.name}`}</button>
               </article>
             );
           })}
@@ -247,6 +266,49 @@ function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: (
       </section>
 
       <footer className="sales-footer"><span>ORBITAL LEADS · Prospecção B2B em órbita</span><button className="link-btn" onClick={onLogin}>Entrar na plataforma</button></footer>
+    </main>
+  );
+}
+
+function ClaimAccessPage({ token, onAuthenticated }: { token: string; onAuthenticated: (user: CurrentUser) => void }) {
+  const [password, setPassword] = useState("");
+  const infoQuery = trpc.cakto.claimInfo.useQuery({ token });
+  const claim = trpc.auth.claimAccess.useMutation({
+    onSuccess: user => {
+      window.history.replaceState({}, "", window.location.pathname);
+      onAuthenticated(user);
+      toast.success("Acesso ativado. Bem-vindo à órbita!");
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  return (
+    <main className="auth-shell">
+      <div className="auth-orb auth-orb-one" />
+      <div className="auth-orb auth-orb-two" />
+      <section className="auth-panel">
+        <div className="brand-lockup"><div className="brand-mark"><Rocket size={20} /></div><span>ORBITAL<span>LEADS</span></span></div>
+        <div className="auth-copy">
+          <p className="eyebrow"><CheckCircle2 size={15} /> PAGAMENTO CONFIRMADO</p>
+          <h1>Ative o seu <em>acesso.</em></h1>
+          <p>A sua compra foi aprovada na Cakto. Defina uma palavra-passe para entrar na plataforma com o email cadastrado na compra.</p>
+        </div>
+      </section>
+      <section className="auth-card-wrap">
+        <div className="auth-card">
+          {infoQuery.isLoading ? <LoadingLine /> : infoQuery.isError ? (
+            <><div className="auth-card-head"><p className="eyebrow">ATIVAÇÃO</p><h2>Link inválido</h2><p>Este link de ativação não existe ou já foi utilizado. Fale com o time Orbital.</p></div></>
+          ) : (
+            <form onSubmit={event => { event.preventDefault(); claim.mutate({ token, password }); }} className="auth-form">
+              <div className="auth-card-head"><p className="eyebrow">ATIVAÇÃO · PLANO {infoQuery.data.plan.name.toUpperCase()}</p><h2>{infoQuery.data.email}</h2></div>
+              <label>Nova palavra-passe<input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} placeholder="Mínimo 8 caracteres" /></label>
+              <button className="btn btn-primary cosmic-primary w-100" disabled={claim.isPending} type="submit">
+                {claim.isPending ? <Loader2 className="spin" size={17} /> : <Rocket size={16} />} Ativar meu acesso
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
@@ -596,7 +658,8 @@ function App() {
   const previewView = navItems.some(item => item.view === requestedPreview) ? requestedPreview as ActiveView : null;
   const previewUser: CurrentUser = { id: 0, name: "Pré-visualização", email: "preview@local.dev", phone: null, role: "user", plan: "scale" };
   const authenticate = (user: CurrentUser) => { utils.auth.me.setData(undefined, user); };
-  return <><Toaster richColors position="top-right" theme="dark" />{meQuery.data ? <AppShell user={meQuery.data} onLogout={() => logout.mutate()} /> : previewView ? <AppShell user={previewUser} initialView={previewView} onLogout={() => { window.location.href = "/"; }} /> : authScreen === "plans" ? <SalesPage onLogin={() => setAuthScreen("login")} onRegister={() => setAuthScreen("register")} /> : <AuthPage initialMode={authScreen} onShowPlans={() => setAuthScreen("plans")} onAuthenticated={authenticate} />}</>;
+  const activateToken = new URLSearchParams(window.location.search).get("ativar");
+  return <><Toaster richColors position="top-right" theme="dark" />{meQuery.data ? <AppShell user={meQuery.data} onLogout={() => logout.mutate()} /> : previewView ? <AppShell user={previewUser} initialView={previewView} onLogout={() => { window.location.href = "/"; }} /> : activateToken ? <ClaimAccessPage token={activateToken} onAuthenticated={authenticate} /> : authScreen === "plans" ? <SalesPage onLogin={() => setAuthScreen("login")} onRegister={() => setAuthScreen("register")} /> : <AuthPage initialMode={authScreen} onShowPlans={() => setAuthScreen("plans")} onAuthenticated={authenticate} />}</>;
 }
 
 export default App;

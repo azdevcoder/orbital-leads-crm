@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { ensureAdminUser } from "../db";
+import { handleCaktoWebhook, isValidCaktoSecret } from "../cakto";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -47,6 +48,18 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
+  // Webhook Cakto (pagamentos): responde 2xx de imediato e processa em seguida.
+  app.post("/api/cakto/webhook", async (req, res) => {
+    const body = (req.body ?? {}) as { secret?: unknown; event?: unknown; data?: unknown };
+    if (!isValidCaktoSecret(body.secret)) {
+      res.status(401).json({ ok: false });
+      return;
+    }
+    res.status(200).json({ ok: true });
+    handleCaktoWebhook(body.event, body.data).catch(error =>
+      console.error("[Cakto] webhook failed", error)
+    );
+  });
   // tRPC API
   app.use(
     "/api/trpc",

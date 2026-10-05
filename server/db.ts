@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import {
+  caktoPayments,
   contactLogs,
   leads,
   leadNotes,
@@ -175,6 +176,105 @@ export async function ensureAdminUser(email: string, password: string, name = "A
     lastSignedIn: new Date(),
   });
   return getUserByEmail(normalized);
+}
+
+export async function setUserPasswordByEmail(email: string, passwordHash: string) {
+  const db = await requireDb();
+  await db
+    .update(users)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(users.email, email.trim().toLowerCase()));
+  return getUserByEmail(email);
+}
+
+/** Pagamentos Cakto (webhook + resgate de acesso). */
+
+export async function createCaktoPayment(input: {
+  token: string;
+  plan: PlanId;
+  email?: string | null;
+}) {
+  const db = await requireDb();
+  await db.insert(caktoPayments).values({
+    token: input.token,
+    plan: planOf(input.plan).id,
+    email: input.email?.trim().toLowerCase() ?? null,
+  });
+  const result = await db.select().from(caktoPayments).where(eq(caktoPayments.token, input.token)).limit(1);
+  return result[0];
+}
+
+export async function getCaktoPaymentByToken(token: string) {
+  const db = await requireDb();
+  const result = await db.select().from(caktoPayments).where(eq(caktoPayments.token, token)).limit(1);
+  return result[0];
+}
+
+export async function getCaktoPaymentByOrderId(orderId: string) {
+  const db = await requireDb();
+  const result = await db.select().from(caktoPayments).where(eq(caktoPayments.orderId, orderId)).limit(1);
+  return result[0];
+}
+
+/** Regista/atualiza o pedido (idempotente por orderId). */
+export async function confirmCaktoPayment(input: {
+  token: string;
+  email: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  orderId: string;
+  plan: PlanId;
+  status: string;
+}) {
+  const db = await requireDb();
+  const existing = await getCaktoPaymentByOrderId(input.orderId);
+  if (existing) {
+    await db
+      .update(caktoPayments)
+      .set({
+        email: input.email?.trim().toLowerCase() ?? existing.email,
+        customerName: input.customerName ?? existing.customerName,
+        customerPhone: input.customerPhone ?? existing.customerPhone,
+        plan: planOf(input.plan).id,
+        status: input.status,
+      })
+      .where(eq(caktoPayments.orderId, input.orderId));
+    return getCaktoPaymentByOrderId(input.orderId);
+  }
+  // Reaproveita linha criada no checkout quando o token coincide.
+  const byToken = await getCaktoPaymentByToken(input.token);
+  if (byToken && !byToken.orderId) {
+    await db
+      .update(caktoPayments)
+      .set({
+        email: input.email?.trim().toLowerCase() ?? null,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        orderId: input.orderId,
+        plan: planOf(input.plan).id,
+        status: input.status,
+      })
+      .where(eq(caktoPayments.token, input.token));
+    return getCaktoPaymentByToken(input.token);
+  }
+  await db.insert(caktoPayments).values({
+    token: input.token,
+    email: input.email?.trim().toLowerCase() ?? null,
+    customerName: input.customerName,
+    customerPhone: input.customerPhone,
+    orderId: input.orderId,
+    plan: planOf(input.plan).id,
+    status: input.status,
+  });
+  return getCaktoPaymentByOrderId(input.orderId);
+}
+
+export async function markCaktoPaymentClaimed(token: string) {
+  const db = await requireDb();
+  await db
+    .update(caktoPayments)
+    .set({ claimedAt: new Date() })
+    .where(eq(caktoPayments.token, token));
 }
 
 export async function getUserByOpenId(openId: string) {

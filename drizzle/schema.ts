@@ -112,6 +112,27 @@ export const searches = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+/** Pagamentos Cakto: liga o token de callback ao pedido e ao plano liberado. */
+export const caktoPayments = pgTable(
+  "cakto_payments",
+  {
+    id: serial("id").primaryKey(),
+    /** token opaco gerado no checkout (?callback=) ou no pedido */
+    token: varchar("token", { length: 64 }).notNull().unique(),
+    plan: varchar("plan", { length: 16 }).default("free").notNull(),
+    email: varchar("email", { length: 320 }),
+    customerName: varchar("customerName", { length: 160 }),
+    customerPhone: varchar("customerPhone", { length: 32 }),
+    orderId: varchar("orderId", { length: 128 }).unique(),
+    status: varchar("status", { length: 32 }).default("pending").notNull(),
+    claimedAt: timestamp("claimedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("cakto_payments_email_idx").on(table.email)]
+);
+
+export type CaktoPayment = typeof caktoPayments.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
 export type LeadNote = typeof leadNotes.$inferSelect;
 export type ContactLog = typeof contactLogs.$inferSelect;

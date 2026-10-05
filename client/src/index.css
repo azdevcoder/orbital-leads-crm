@@ -104,6 +104,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .admin-create { margin-bottom: 20px; padding: 26px; }.admin-create form { margin-top: 20px; }
 .admin-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }.admin-form label { display: grid; gap: 7px; color: #ced7fa; font-size: .77rem; font-weight: 700; }.admin-form input, .admin-form select { width: 100%; border: 1px solid rgba(177,192,255,.16); border-radius: 10px; color: #f6f7ff; background: rgba(5,8,29,.55); padding: 11px 12px; }.admin-form .btn { grid-column: 1/-1; justify-self: start; padding: 12px 22px; border-radius: 11px; }
 .admin-table select { border: 1px solid rgba(177,192,255,.16); border-radius: 8px; color: #f6f7ff; background: rgba(5,8,29,.55); padding: 6px 8px; font-size: .72rem; }
+.temp-password { padding: 4px 8px; border: 1px dashed rgba(85,236,255,.5); border-radius: 8px; color: var(--cyan); background: rgba(85,236,255,.07); font-size: .72rem; }
 @media (max-width: 1050px) { .sales-features, .plans-grid { grid-template-columns: 1fr 1fr; }.admin-form { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 820px) { .admin-form { grid-template-columns: 1fr; } }
 @media (max-width: 530px) { .sales-features, .plans-grid { grid-template-columns: 1fr; }.sales-top-actions .btn { padding: 9px 13px; } }

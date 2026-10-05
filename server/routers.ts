@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import ExcelJS from "exceljs";
 import { Parser } from "json2csv";
+import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
@@ -167,6 +168,42 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    claimAccess: publicProcedure
+      .input(
+        z.object({
+          token: z.string().trim().min(8).max(64),
+          password: z.string().min(8, "A palavra-passe deve ter pelo menos 8 caracteres.").max(128),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Resgate do acesso comprado na Cakto (link de uso único).
+        const payment = await db.getCaktoPaymentByToken(input.token);
+        if (!payment || payment.status !== "paid" || payment.claimedAt || !payment.email) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Link de ativação inválido ou já utilizado." });
+        }
+        const plan = planOf(payment.plan).id;
+        const email = payment.email;
+        const passwordHash = await bcrypt.hash(input.password, 12);
+        let user = await db.getUserByEmail(email);
+        if (!user) {
+          user = await db.createLocalUser({
+            name: (payment.customerName ?? "").trim() || email.split("@")[0],
+            email,
+            phone: (payment.customerPhone ?? "").trim() || "-",
+            passwordHash,
+            plan,
+          });
+        } else {
+          await db.setUserPasswordByEmail(email, passwordHash);
+          if (user.plan !== plan) await db.setUserPlan(user.openId, plan);
+          user = await db.getUserByEmail(email);
+        }
+        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível ativar o acesso." });
+        await db.markCaktoPaymentClaimed(input.token);
+        const token = await sdk.createSessionToken(user.openId, { name: user.name || user.email || "Utilizador" });
+        setLocalSession(ctx.res, ctx.req, token);
+        return safeUser(user);
+      }),
     updateProfile: protectedProcedure
       .input(
         z.object({
@@ -383,6 +420,44 @@ export const appRouter = router({
         const user = await db.setUserPlan(input.openId, input.plan as PlanId);
         if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Utilizador não encontrado." });
         return safeAdminUser(user);
+      }),
+    resetPassword: adminProcedure
+      .input(z.object({ openId: z.string().min(1) }))
+      .mutation(async ({ input }) => {
+        // Apoio a vendas Cakto: gera senha temporária de uso único para repassar ao cliente.
+        const user = await db.getUserByOpenId(input.openId);
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Utilizador não encontrado." });
+        const tempPassword = nanoid(12);
+        await db.updateUserPassword(user.id, await bcrypt.hash(tempPassword, 12));
+        return { tempPassword };
+      }),
+  }),
+  cakto: router({
+    checkout: publicProcedure
+      .input(z.object({ plan: z.enum(["start", "growth", "scale"]) }))
+      .mutation(async ({ input }) => {
+        // Gera token opaco, regista a intenção e devolve o checkout com ?callback=token.
+        const base = {
+          start: process.env.CAKTO_CHECKOUT_START ?? "",
+          growth: process.env.CAKTO_CHECKOUT_GROWTH ?? "",
+          scale: process.env.CAKTO_CHECKOUT_SCALE ?? "",
+        }[input.plan];
+        if (!base) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Checkout deste plano ainda não configurado. Fale com o time Orbital." });
+        }
+        const token = nanoid(24);
+        await db.createCaktoPayment({ token, plan: input.plan });
+        const sep = base.includes("?") ? "&" : "?";
+        return { url: `${base}${sep}callback=${token}` };
+      }),
+    claimInfo: publicProcedure
+      .input(z.object({ token: z.string().trim().min(8).max(64) }))
+      .query(async ({ input }) => {
+        const payment = await db.getCaktoPaymentByToken(input.token);
+        if (!payment || payment.status !== "paid" || payment.claimedAt || !payment.email) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Link de ativação inválido ou já utilizado." });
+        }
+        return { email: payment.email, plan: planOf(payment.plan) };
       }),
   }),
 });
