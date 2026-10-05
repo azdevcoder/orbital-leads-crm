@@ -21,7 +21,7 @@ export const PIPELINE_STATUSES = [
 
 export type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
 export const pipelineStatusEnum = pgEnum("pipeline_status", PIPELINE_STATUSES);
-export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+export const userRoleEnum = pgEnum("user_role", ["user", "vendedor", "admin"]);
 
 /** Cada utilizador é um tenant independente da aplicação. */
 export const users = pgTable("users", {

@@ -14,6 +14,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { planOf, todayKey, type PlanId } from "../shared/plans";
+import type { RoleId } from "../shared/roles";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -83,7 +84,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     name?: string | null;
     email?: string | null;
     loginMethod?: string | null;
-    role?: "user" | "admin";
+    role?: "user" | "vendedor" | "admin";
     lastSignedIn: Date;
     updatedAt: Date;
   } = { lastSignedIn: user.lastSignedIn ?? now, updatedAt: now };
@@ -149,6 +150,43 @@ export async function setUserPlan(openId: string, plan: PlanId) {
     .set({ plan: planOf(plan).id, updatedAt: new Date() })
     .where(eq(users.openId, openId));
   return getUserByOpenId(openId);
+}
+
+/** Edição completa pelo admin: perfil + plano + papel. */
+export async function adminUpdateUser(
+  openId: string,
+  input: { name?: string; email?: string; phone?: string; plan?: PlanId; role?: RoleId }
+) {
+  const db = await requireDb();
+  const current = await getUserByOpenId(openId);
+  if (!current) return undefined;
+  if (input.email !== undefined) {
+    const normalized = input.email.trim().toLowerCase();
+    const owner = await getUserByEmail(normalized);
+    if (owner && owner.openId !== openId) {
+      throw new Error("Este email já está associado a outra conta.");
+    }
+  }
+  const values: {
+    name?: string; email?: string; phone?: string; plan?: string; role?: RoleId; updatedAt: Date;
+  } = { updatedAt: new Date() };
+  if (input.name !== undefined) values.name = input.name.trim();
+  if (input.email !== undefined) values.email = input.email.trim().toLowerCase();
+  if (input.phone !== undefined) values.phone = input.phone.trim();
+  if (input.plan !== undefined) values.plan = planOf(input.plan).id;
+  if (input.role !== undefined) values.role = input.role;
+  await db.update(users).set(values).where(eq(users.openId, openId));
+  return getUserByOpenId(openId);
+}
+
+/** Exclui a conta e todos os dados do tenant (leads, notas, contactos, buscas). */
+export async function deleteUserAccount(openId: string) {
+  const db = await requireDb();
+  await db.delete(leadNotes).where(eq(leadNotes.tenantId, openId));
+  await db.delete(contactLogs).where(eq(contactLogs.tenantId, openId));
+  await db.delete(leads).where(eq(leads.tenantId, openId));
+  await db.delete(searches).where(eq(searches.tenantId, openId));
+  await db.delete(users).where(eq(users.openId, openId));
 }
 
 /** Garante a conta administradora no arranque (via ADMIN_EMAIL/ADMIN_PASSWORD). */

@@ -6,6 +6,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { checkSearchQuota, PLAN_IDS, planHasCrm, planHasExport, planOf, type PlanId } from "@shared/plans";
+import { ROLE_IDS, type RoleId } from "@shared/roles";
 import { PIPELINE_STATUSES, type PipelineStatus } from "../drizzle/schema";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -23,13 +24,13 @@ const leadFiltersSchema = z.object({
   selectedIds: z.array(z.number().int().positive()).max(500).optional(),
 });
 
-function safeUser(user: { id: number; name: string | null; email: string | null; phone?: string | null; role: "user" | "admin"; plan?: string | null }) {
+function safeUser(user: { id: number; name: string | null; email: string | null; phone?: string | null; role: RoleId; plan?: string | null }) {
   return { id: user.id, name: user.name, email: user.email, phone: user.phone ?? null, role: user.role, plan: planOf(user.plan).id };
 }
 
 function safeAdminUser(user: {
   id: number; openId: string; name: string | null; email: string | null; phone: string | null;
-  role: "user" | "admin"; plan: string | null; quotaDay: string | null;
+  role: RoleId; plan: string | null; quotaDay: string | null;
   dailySearches: number; dailyLeads: number; totalSearches: number;
   createdAt: Date; lastSignedIn: Date;
 }) {
@@ -436,6 +437,39 @@ export const appRouter = router({
         const tempPassword = nanoid(12);
         await db.updateUserPassword(user.id, await bcrypt.hash(tempPassword, 12));
         return { tempPassword };
+      }),
+    updateUser: adminProcedure
+      .input(
+        z.object({
+          openId: z.string().min(1),
+          name: z.string().trim().min(2).max(160).optional(),
+          email: z.string().trim().email("Indique um email válido.").max(320).optional(),
+          phone: z.string().trim().min(8).max(32).optional(),
+          plan: z.enum(PLAN_IDS).optional(),
+          role: z.enum(ROLE_IDS).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { openId, ...values } = input;
+        try {
+          const user = await db.adminUpdateUser(openId, values as { name?: string; email?: string; phone?: string; plan?: PlanId; role?: RoleId });
+          if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Utilizador não encontrado." });
+          return safeAdminUser(user);
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          throw new TRPCError({ code: "CONFLICT", message: error instanceof Error ? error.message : "Não foi possível atualizar." });
+        }
+      }),
+    deleteUser: adminProcedure
+      .input(z.object({ openId: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        if (input.openId === ctx.user.openId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Não é possível excluir a própria conta de administrador." });
+        }
+        const target = await db.getUserByOpenId(input.openId);
+        if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "Utilizador não encontrado." });
+        await db.deleteUserAccount(input.openId);
+        return { success: true as const };
       }),
   }),
   cakto: router({

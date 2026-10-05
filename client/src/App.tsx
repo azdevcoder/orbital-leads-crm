@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { trpc } from "@/lib/trpc";
 import { PLANS, formatPrice, planEconomics, planHasCrm, planHasExport, planHasWhatsapp, type PlanId } from "@shared/plans";
+import { ROLE_IDS, ROLE_LABELS, roleLabel, type RoleId } from "@shared/roles";
 import {
   ArrowUpRight,
   BarChart3,
@@ -43,7 +44,7 @@ ChartJS.register(ArcElement, DoughnutController, Legend, Tooltip);
 const PIPELINE_STATUSES = ["Novo", "Contatado", "Em Negociação", "Fechado", "Perdido"] as const;
 type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
 type ActiveView = "dashboard" | "search" | "crm" | "settings" | "admin";
-type CurrentUser = { id: number; name: string | null; email: string | null; phone: string | null; role: "user" | "admin"; plan: PlanId };
+type CurrentUser = { id: number; name: string | null; email: string | null; phone: string | null; role: RoleId; plan: PlanId };
 
 const navItems: Array<{ label: string; view: ActiveView; icon: typeof LayoutDashboard }> = [
   { label: "Dashboard", view: "dashboard", icon: LayoutDashboard },
@@ -93,7 +94,7 @@ function QuotaBanner({ quota }: { quota: { plan: { name: string }; allowed: bool
 
 type AdminUserRow = {
   id: number; openId: string; name: string | null; email: string | null; phone: string | null;
-  role: "user" | "admin"; plan: PlanId; quotaDay: string | null;
+  role: RoleId; plan: PlanId; quotaDay: string | null;
   dailySearches: number; dailyLeads: number; totalSearches: number;
   createdAt: Date; lastSignedIn: Date;
 };
@@ -124,6 +125,19 @@ function AdminPanel() {
     },
     onError: error => toast.error(error.message),
   });
+  const [editing, setEditing] = useState<{ openId: string; name: string; email: string; phone: string } | null>(null);
+  const updateUser = trpc.admin.updateUser.useMutation({
+    onSuccess: async () => {
+      setEditing(null);
+      await utils.admin.listUsers.invalidate();
+      toast.success("Usuário atualizado.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const deleteUser = trpc.admin.deleteUser.useMutation({
+    onSuccess: async () => { await utils.admin.listUsers.invalidate(); toast.success("Usuário excluído."); },
+    onError: error => toast.error(error.message),
+  });
 
   return (
     <section className="admin-page">
@@ -144,29 +158,57 @@ function AdminPanel() {
         <div className="lead-table-wrap">
           {usersQuery.isLoading ? <LoadingLine /> : usersQuery.isError ? <QueryError text="Não foi possível carregar os usuários." onRetry={() => usersQuery.refetch()} /> : (
             <table className="lead-table admin-table">
-              <thead><tr><th>Nome</th><th>Contato</th><th>Plano</th><th>Buscas hoje</th><th>Leads hoje</th><th>Total buscas</th><th>Desde</th><th>Acesso</th></tr></thead>
+              <thead><tr><th>Nome</th><th>Contato</th><th>Plano</th><th>Papel</th><th>Buscas hoje</th><th>Leads hoje</th><th>Total buscas</th><th>Desde</th><th>Acesso</th><th>Gerir</th></tr></thead>
               <tbody>
                 {(usersQuery.data as AdminUserRow[] | undefined)?.map(account => (
-                  <tr key={account.openId}>
-                    <td><strong>{account.name ?? "—"}</strong><br /><small>{account.role === "admin" ? "administrador" : "cliente"}</small></td>
-                    <td>{account.email}<br /><small>{account.phone ?? "—"}</small></td>
-                    <td>
-                      <select aria-label={`Plano de ${account.email}`} value={account.plan} disabled={setPlan.isPending} onChange={event => setPlan.mutate({ openId: account.openId, plan: event.target.value as PlanId })}>
-                        {(Object.keys(PLANS) as PlanId[]).map(planId => <option key={planId} value={planId}>{PLANS[planId].name}</option>)}
-                      </select>
-                    </td>
-                    <td>{account.dailySearches}</td>
-                    <td>{account.dailyLeads}</td>
-                    <td>{account.totalSearches}</td>
-                    <td><small>{formatDate(account.createdAt)}</small></td>
-                    <td>
-                      {tempPasswords[account.openId] ? (
-                        <code className="temp-password">{tempPasswords[account.openId]}</code>
-                      ) : (
-                        <button className="link-btn" disabled={resetPassword.isPending} onClick={() => resetPassword.mutate({ openId: account.openId })} title="Gerar senha temporária">Nova senha</button>
-                      )}
-                    </td>
-                  </tr>
+                  <React.Fragment key={account.openId}>
+                    <tr>
+                      <td><strong>{account.name ?? "—"}</strong><br /><small>{roleLabel(account.role)}</small></td>
+                      <td>{account.email}<br /><small>{account.phone ?? "—"}</small></td>
+                      <td>
+                        <select aria-label={`Plano de ${account.email}`} value={account.plan} disabled={setPlan.isPending} onChange={event => setPlan.mutate({ openId: account.openId, plan: event.target.value as PlanId })}>
+                          {(Object.keys(PLANS) as PlanId[]).map(planId => <option key={planId} value={planId}>{PLANS[planId].name}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <select aria-label={`Papel de ${account.email}`} value={account.role} disabled={updateUser.isPending} onChange={event => updateUser.mutate({ openId: account.openId, role: event.target.value as RoleId })}>
+                          {ROLE_IDS.map(roleId => <option key={roleId} value={roleId}>{ROLE_LABELS[roleId]}</option>)}
+                        </select>
+                      </td>
+                      <td>{account.dailySearches}</td>
+                      <td>{account.dailyLeads}</td>
+                      <td>{account.totalSearches}</td>
+                      <td><small>{formatDate(account.createdAt)}</small></td>
+                      <td>
+                        {tempPasswords[account.openId] ? (
+                          <code className="temp-password">{tempPasswords[account.openId]}</code>
+                        ) : (
+                          <button className="link-btn" disabled={resetPassword.isPending} onClick={() => resetPassword.mutate({ openId: account.openId })} title="Gerar senha temporária">Nova senha</button>
+                        )}
+                      </td>
+                      <td>
+                        <button className="link-btn" onClick={() => setEditing(editing?.openId === account.openId ? null : { openId: account.openId, name: account.name ?? "", email: account.email ?? "", phone: account.phone ?? "" })}>Editar</button>
+                        {" · "}
+                        <button className="link-btn link-danger" disabled={deleteUser.isPending} onClick={() => { if (window.confirm(`Excluir ${account.name ?? account.email} e todos os seus leads?`)) deleteUser.mutate({ openId: account.openId }); }}>Excluir</button>
+                      </td>
+                    </tr>
+                    {editing?.openId === account.openId && (
+                      <tr key={`${account.openId}-edit`}>
+                        <td colSpan={10}>
+                          <form className="admin-form" onSubmit={event => { event.preventDefault(); updateUser.mutate({ openId: editing.openId, name: editing.name, email: editing.email, phone: editing.phone }); }}>
+                            <label>Nome<input value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} minLength={2} required /></label>
+                            <label>Email<input type="email" value={editing.email} onChange={event => setEditing({ ...editing, email: event.target.value })} required /></label>
+                            <label>Telefone<input value={editing.phone} onChange={event => setEditing({ ...editing, phone: event.target.value })} minLength={8} maxLength={32} required /></label>
+                            <span>
+                              <button className="btn cosmic-primary" disabled={updateUser.isPending}>{updateUser.isPending ? <Loader2 className="spin" size={16} /> : "Guardar"}</button>
+                              {" "}
+                              <button type="button" className="btn subtle-btn" onClick={() => setEditing(null)}>Cancelar</button>
+                            </span>
+                          </form>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

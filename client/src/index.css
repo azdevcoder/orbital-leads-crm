@@ -74,6 +74,7 @@ a.btn { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
 
 .link-btn { padding: 0; color: var(--cyan); background: transparent; font-size: .78rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.link-danger { color: #ff9aad; }
 .sales-page { position: relative; min-height: 100vh; overflow: hidden; background: radial-gradient(circle at 50% 0%, #1a2154 0%, #0c0e2a 30%, #07091c 70%); }
 .sales-topbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; max-width: 1180px; margin: 0 auto; padding: 26px clamp(20px,4vw,44px); }
 .sales-top-actions { display: flex; gap: 10px; }.sales-top-actions .btn { padding: 10px 18px; border-radius: 11px; font-size: .82rem; font-weight: 800; }
