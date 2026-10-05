@@ -131,6 +131,7 @@ export async function recordSearchUsage(openId: string, saved: number) {
       dailySearches: (sameDay ? user.dailySearches : 0) + 1,
       dailyLeads: (sameDay ? user.dailyLeads : 0) + saved,
       totalSearches: user.totalSearches + 1,
+      totalLeads: user.totalLeads + saved,
       updatedAt: new Date(),
     })
     .where(eq(users.openId, openId));

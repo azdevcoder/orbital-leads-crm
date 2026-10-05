@@ -87,7 +87,7 @@ describe("captura Google Places", () => {
   it("bloqueia a busca quando a cota do plano esgota, sem chamar o Google", async () => {
     const caller = appRouter.createCaller({
       ...protectedContext(),
-      user: { ...protectedContext().user, plan: "free", totalSearches: 1 },
+      user: { ...protectedContext().user, plan: "free", totalSearches: 4, totalLeads: 10 },
     });
 
     await expect(

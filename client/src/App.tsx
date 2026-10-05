@@ -1,6 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { trpc } from "@/lib/trpc";
-import { PLANS, formatPrice, planHasCrm, planHasExport, planHasWhatsapp, type PlanId } from "@shared/plans";
+import { PLANS, formatPrice, planEconomics, planHasCrm, planHasExport, planHasWhatsapp, type PlanId } from "@shared/plans";
 import {
   ArrowUpRight,
   BarChart3,
@@ -256,6 +256,7 @@ function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: (
                 <p className="eyebrow">{plan.name.toUpperCase()}</p>
                 <p className="plan-price">{formatPrice(plan.price)}{plan.price > 0 && <small>/mês</small>}</p>
                 <p className="plan-tagline">{plan.tagline}</p>
+                {planEconomics(plan) && <p className="plan-econ">{planEconomics(plan)}</p>}
                 <ul>{plan.features.map(item => <li key={item}><Check size={14} /> {item}</li>)}</ul>
                 <button className={`btn ${highlight ? "cosmic-primary" : "subtle-btn"}`} disabled={checkout.isPending} onClick={() => plan.price === 0 ? onRegister() : checkout.mutate({ plan: planId })}>{checkout.isPending ? <Loader2 className="spin" size={16} /> : plan.price === 0 ? "Criar conta grátis" : `Assinar ${plan.name}`}</button>
               </article>

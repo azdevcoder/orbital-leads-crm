@@ -94,6 +94,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .plan-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 99px; color: #05142b; background: linear-gradient(98deg, #65efff, #9b8bff); font-size: .6rem; font-weight: 800; letter-spacing: .08em; white-space: nowrap; }
 .plan-price { margin: 0; font-family: "Orbitron", sans-serif; font-size: 1.7rem; font-weight: 800; }.plan-price small { color: var(--muted); font-family: inherit; font-size: .75rem; }
 .plan-tagline { margin: 0; color: #9aa6cc; font-size: .76rem; }
+.plan-econ { margin: 0; padding: 9px 11px; border: 1px solid rgba(90,228,169,.25); border-radius: 10px; color: #8fe9bd; background: rgba(90,228,169,.06); font-size: .7rem; line-height: 1.6; }
 .plan-card ul { display: grid; gap: 8px; margin: 8px 0 6px; padding: 0; list-style: none; }.plan-card li { display: flex; gap: 8px; align-items: flex-start; color: #c3cdea; font-size: .76rem; line-height: 1.5; }.plan-card li svg { flex: 0 0 auto; margin-top: 2px; color: #5ae4a9; }
 .plan-card .btn { width: 100%; margin-top: 6px; padding: 12px; border-radius: 11px; font-weight: 800; }
 .sales-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1180px; margin: 40px auto 0; padding: 26px clamp(20px,4vw,44px) 40px; border-top: 1px solid rgba(168,181,255,.1); color: #7e8bb3; font-size: .75rem; }

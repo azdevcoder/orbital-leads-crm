@@ -38,6 +38,7 @@ export const users = pgTable("users", {
   dailySearches: integer("dailySearches").default(0).notNull(),
   dailyLeads: integer("dailyLeads").default(0).notNull(),
   totalSearches: integer("totalSearches").default(0).notNull(),
+  totalLeads: integer("totalLeads").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

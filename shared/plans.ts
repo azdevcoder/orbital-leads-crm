@@ -11,14 +11,14 @@ export type PlanInfo = {
   name: string;
   price: number; // R$/mês
   tagline: string;
-  /** Buscas por dia (null = ilimitado, exceto free que usa lifetimeSearches). */
+  /** Buscas por dia (null = ilimitado). */
   searchesPerDay: number | null;
   /** Leads capturados por dia (null = ilimitado). */
   leadsPerDay: number | null;
   /** Máximo de resultados por busca. */
   maxPerSearch: number;
-  /** Total de buscas na vida da conta (só o free usa; null = sem teto vitalício). */
-  lifetimeSearches: number | null;
+  /** Total de leads na vida da conta (só o free usa; null = sem teto vitalício). */
+  lifetimeLeads: number | null;
   features: string[];
 };
 
@@ -31,9 +31,9 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     searchesPerDay: null,
     leadsPerDay: null,
     maxPerSearch: 10,
-    lifetimeSearches: 1,
+    lifetimeLeads: 10,
     features: [
-      "1 busca com até 10 leads",
+      "10 leads grátis no total",
       "CRM completo com Kanban",
       "Ação direta no WhatsApp",
       "Exportação CSV e XLSX",
@@ -44,13 +44,13 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     name: "Start",
     price: 29.9,
     tagline: "Para quem prospecta todo dia",
-    searchesPerDay: 50,
-    leadsPerDay: 1000,
+    searchesPerDay: null,
+    leadsPerDay: 50,
     maxPerSearch: 20,
-    lifetimeSearches: null,
+    lifetimeLeads: null,
     features: [
-      "Até 50 buscas por dia",
-      "Até 1.000 leads por dia",
+      "Até 50 leads por dia",
+      "Buscas ilimitadas",
       "Lista de leads com filtros",
     ],
   },
@@ -59,13 +59,13 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     name: "Plus",
     price: 49.9,
     tagline: "Para operações em escala",
-    searchesPerDay: 100,
-    leadsPerDay: 2000,
+    searchesPerDay: null,
+    leadsPerDay: 100,
     maxPerSearch: 20,
-    lifetimeSearches: null,
+    lifetimeLeads: null,
     features: [
-      "Até 100 buscas por dia",
-      "Até 2.000 leads por dia",
+      "Até 100 leads por dia",
+      "Buscas ilimitadas",
       "CRM completo com Kanban",
       "Ação direta no WhatsApp",
       "Exportação CSV e XLSX",
@@ -106,6 +106,7 @@ export type QuotaUser = {
   dailySearches: number | null;
   dailyLeads: number | null;
   totalSearches: number | null;
+  totalLeads: number | null;
 };
 
 export type QuotaCheck = {
@@ -124,15 +125,15 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
   const sameDay = (user.quotaDay ?? "") === todayKey(now);
   const dailySearches = sameDay ? (user.dailySearches ?? 0) : 0;
   const dailyLeads = sameDay ? (user.dailyLeads ?? 0) : 0;
-  const totalSearches = user.totalSearches ?? 0;
+  const totalLeads = user.totalLeads ?? 0;
 
-  if (plan.lifetimeSearches !== null && totalSearches >= plan.lifetimeSearches) {
+  if (plan.lifetimeLeads !== null && totalLeads >= plan.lifetimeLeads) {
     return {
       allowed: false,
-      reason: "O plano Grátis permite apenas 1 busca de até 10 leads. Fale com o time Orbital para ativar um plano pago.",
+      reason: `O plano Grátis inclui ${plan.lifetimeLeads} leads no total. Fale com o time Orbital para ativar um plano pago.`,
       maxResults: plan.maxPerSearch,
       plan,
-      searchesLeft: 0,
+      searchesLeft: null,
       leadsLeft: 0,
     };
   }
@@ -169,6 +170,18 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
 
 export function formatPrice(value: number): string {
   return value === 0 ? "Grátis" : `R$ ${value.toFixed(2).replace(".", ",")}`;
+}
+
+/** Conta da padaria: leads/dia × 30 dias = leads/mês e custo por lead (truncado). */
+export function planEconomics(plan: PlanInfo): string | null {
+  if (plan.leadsPerDay === null || plan.price <= 0) return null;
+  const perMonth = plan.leadsPerDay * 30;
+  const perLead = Math.floor((plan.price / perMonth) * 1000) / 1000;
+  return (
+    `${plan.leadsPerDay} leads/dia × 30 dias = ${perMonth.toLocaleString("pt-BR")} leads/mês · ` +
+    `R$ ${plan.price.toFixed(2).replace(".", ",")} / ${perMonth.toLocaleString("pt-BR")} = ` +
+    `R$ ${perLead.toFixed(3).replace(".", ",")} por lead`
+  );
 }
 
 /** Recursos por plano: Start tem só busca + lista. */
