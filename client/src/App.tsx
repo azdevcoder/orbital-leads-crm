@@ -1,8 +1,10 @@
 import { Toaster } from "@/components/ui/sonner";
 import { trpc } from "@/lib/trpc";
+import { PLANS, formatPrice, type PlanId } from "@shared/plans";
 import {
   ArrowUpRight,
   BarChart3,
+  Check,
   CheckCircle2,
   Columns3,
   Download,
@@ -23,6 +25,7 @@ import {
   Search as SearchIcon,
   Settings,
   Sheet,
+  ShieldCheck,
   Sparkles,
   Star,
   Target,
@@ -39,8 +42,8 @@ ChartJS.register(ArcElement, DoughnutController, Legend, Tooltip);
 
 const PIPELINE_STATUSES = ["Novo", "Contatado", "Em Negociação", "Fechado", "Perdido"] as const;
 type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
-type ActiveView = "dashboard" | "search" | "crm" | "settings";
-type CurrentUser = { id: number; name: string | null; email: string | null; role: "user" | "admin" };
+type ActiveView = "dashboard" | "search" | "crm" | "settings" | "admin";
+type CurrentUser = { id: number; name: string | null; email: string | null; phone: string | null; role: "user" | "admin"; plan: PlanId };
 
 const navItems: Array<{ label: string; view: ActiveView; icon: typeof LayoutDashboard }> = [
   { label: "Dashboard", view: "dashboard", icon: LayoutDashboard },
@@ -49,9 +52,11 @@ const navItems: Array<{ label: string; view: ActiveView; icon: typeof LayoutDash
   { label: "Configurações", view: "settings", icon: Settings },
 ];
 
-export function AppNavigation({ view, onNavigate }: { view: ActiveView; onNavigate: (nextView: ActiveView) => void }) {
+const adminNavItem = { label: "Admin", view: "admin" as ActiveView, icon: ShieldCheck };
+
+export function AppNavigation({ view, onNavigate, items = navItems }: { view: ActiveView; onNavigate: (nextView: ActiveView) => void; items?: typeof navItems }) {
   return <nav className="side-nav" aria-label="Navegação principal">
-    {navItems.map(item => {
+    {items.map(item => {
       const Icon = item.icon;
       return <button key={item.view} className={view === item.view ? "active" : ""} onClick={() => onNavigate(item.view)}><Icon size={18} /><span>{item.label}</span></button>;
     })}
@@ -72,6 +77,89 @@ export function NoteComposer({ value, pending, onChange, onAdd }: { value: strin
 
 export function applyKanbanMove(input: { leadId: number; fromStatus?: string; nextStatus?: PipelineStatus; onMove: (leadId: number, status: PipelineStatus) => void }) {
   if (input.leadId && input.nextStatus && input.nextStatus !== input.fromStatus) input.onMove(input.leadId, input.nextStatus);
+}
+
+function QuotaBanner({ quota }: { quota: { plan: { name: string }; allowed: boolean; reason: string | null; searchesLeft: number | null; leadsLeft: number | null } }) {
+  const parts: string[] = [];
+  parts.push(quota.searchesLeft === null ? "buscas ilimitadas" : `${quota.searchesLeft} ${quota.searchesLeft === 1 ? "busca restante" : "buscas restantes"} hoje`);
+  if (quota.leadsLeft !== null) parts.push(`${quota.leadsLeft.toLocaleString("pt-BR")} leads restantes hoje`);
+  return (
+    <div className={`quota-banner panel-glass${quota.allowed ? "" : " quota-exhausted"}`} role="status">
+      <span className="plan-chip">{quota.plan.name}</span>
+      <span>{quota.allowed ? parts.join(" · ") : quota.reason}</span>
+    </div>
+  );
+}
+
+type AdminUserRow = {
+  id: number; openId: string; name: string | null; email: string | null; phone: string | null;
+  role: "user" | "admin"; plan: PlanId; quotaDay: string | null;
+  dailySearches: number; dailyLeads: number; totalSearches: number;
+  createdAt: Date; lastSignedIn: Date;
+};
+
+function AdminPanel() {
+  const utils = trpc.useUtils();
+  const usersQuery = trpc.admin.listUsers.useQuery();
+  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", plan: "free" as PlanId });
+  const setField = (field: "name" | "email" | "phone" | "password" | "plan") => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(current => ({ ...current, [field]: event.target.value }));
+  const createUser = trpc.admin.createUser.useMutation({
+    onSuccess: async () => {
+      setForm({ name: "", email: "", phone: "", password: "", plan: "free" });
+      await utils.admin.listUsers.invalidate();
+      toast.success("Conta de usuário criada.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const setPlan = trpc.admin.setPlan.useMutation({
+    onSuccess: async () => { await utils.admin.listUsers.invalidate(); toast.success("Plano atualizado."); },
+    onError: error => toast.error(error.message),
+  });
+
+  return (
+    <section className="admin-page">
+      <div className="crm-head"><div><p className="eyebrow"><ShieldCheck size={15} /> VISÃO GERAL</p><h1>Painel <em>Admin.</em></h1></div><span className="selection-text">{usersQuery.data?.length ?? 0} contas</span></div>
+      <article className="settings-card panel-glass admin-create">
+        <div className="panel-heading"><div><p className="eyebrow">NOVO ACESSO</p><h3>Criar conta de usuário</h3></div><Plus size={20} /></div>
+        <form onSubmit={event => { event.preventDefault(); createUser.mutate({ ...form }); }} className="admin-form">
+          <label>Nome<input value={form.name} onChange={setField("name")} minLength={2} required placeholder="Nome completo" /></label>
+          <label>Email<input type="email" value={form.email} onChange={setField("email")} required placeholder="voce@empresa.com" /></label>
+          <label>Telefone<input value={form.phone} onChange={setField("phone")} required minLength={8} maxLength={32} placeholder="+55 19 99999-0000" /></label>
+          <label>Senha inicial<input type="password" value={form.password} onChange={setField("password")} required minLength={8} placeholder="Mínimo 8 caracteres" /></label>
+          <label>Plano<select value={form.plan} onChange={setField("plan")}>{(Object.keys(PLANS) as PlanId[]).map(planId => <option key={planId} value={planId}>{PLANS[planId].name} — {formatPrice(PLANS[planId].price)}</option>)}</select></label>
+          <button className="btn cosmic-primary" disabled={createUser.isPending}>{createUser.isPending ? <Loader2 className="spin" size={16} /> : <Plus size={16} />} Criar conta</button>
+        </form>
+      </article>
+      <article className="table-panel panel-glass">
+        <div className="panel-heading"><div><p className="eyebrow">CLIENTES</p><h3>Todas as contas</h3></div><Users size={20} /></div>
+        <div className="lead-table-wrap">
+          {usersQuery.isLoading ? <LoadingLine /> : usersQuery.isError ? <QueryError text="Não foi possível carregar os usuários." onRetry={() => usersQuery.refetch()} /> : (
+            <table className="lead-table admin-table">
+              <thead><tr><th>Nome</th><th>Contato</th><th>Plano</th><th>Buscas hoje</th><th>Leads hoje</th><th>Total buscas</th><th>Desde</th></tr></thead>
+              <tbody>
+                {(usersQuery.data as AdminUserRow[] | undefined)?.map(account => (
+                  <tr key={account.openId}>
+                    <td><strong>{account.name ?? "—"}</strong><br /><small>{account.role === "admin" ? "administrador" : "cliente"}</small></td>
+                    <td>{account.email}<br /><small>{account.phone ?? "—"}</small></td>
+                    <td>
+                      <select aria-label={`Plano de ${account.email}`} value={account.plan} disabled={setPlan.isPending} onChange={event => setPlan.mutate({ openId: account.openId, plan: event.target.value as PlanId })}>
+                        {(Object.keys(PLANS) as PlanId[]).map(planId => <option key={planId} value={planId}>{PLANS[planId].name}</option>)}
+                      </select>
+                    </td>
+                    <td>{account.dailySearches}</td>
+                    <td>{account.dailyLeads}</td>
+                    <td>{account.totalSearches}</td>
+                    <td><small>{formatDate(account.createdAt)}</small></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </article>
+    </section>
+  );
 }
 
 function statusClass(status: string) {
@@ -105,10 +193,69 @@ function downloadFromBase64(data: { filename: string; mimeType: string; base64: 
   URL.revokeObjectURL(url);
 }
 
-function AuthPage({ onAuthenticated }: { onAuthenticated: (user: CurrentUser) => void }) {
-  const [mode, setMode] = useState<"login" | "register">("login");
+const planOrder: PlanId[] = ["free", "start", "growth", "scale"];
+
+function SalesPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
+  return (
+    <main className="sales-page">
+      <div className="cosmic-backdrop" aria-hidden="true"><span className="nebula nebula-one" /><span className="nebula nebula-two" /></div>
+      <header className="sales-topbar">
+        <div className="brand-lockup"><div className="brand-mark"><Rocket size={19} /></div><span>ORBITAL<span>LEADS</span></span></div>
+        <div className="sales-top-actions"><button className="btn subtle-btn" onClick={onLogin}>Entrar</button><button className="btn cosmic-primary" onClick={onRegister}>Criar conta grátis</button></div>
+      </header>
+
+      <section className="sales-hero">
+        <p className="eyebrow"><Sparkles size={15} /> PROSPECÇÃO B2B EM ÓRBITA</p>
+        <h1>Encontre empresas, organize no <em>Kanban</em> e chame no <em>WhatsApp.</em></h1>
+        <p>O Orbital Leads captura empresas do Google com telefone, endereço, website e avaliação — e coloca cada oportunidade num pipeline visual com redirecionamento direto para o WhatsApp.</p>
+        <div className="sales-cta-row"><button className="btn cosmic-primary" onClick={onRegister}><Rocket size={17} /> Começar grátis</button><button className="btn subtle-btn" onClick={onLogin}>Já tenho conta</button></div>
+        <p className="sales-guarantee"><Check size={14} /> Sem cartão de crédito · Cancele quando quiser</p>
+      </section>
+
+      <section className="sales-features">
+        {[
+          { icon: SearchIcon, title: "Captura via Google", text: "Segmento + cidade + UF e o servidor grava nome, telefone, endereço, website e avaliação." },
+          { icon: Columns3, title: "CRM Kanban completo", text: "Novo → Contatado → Em negociação → Fechado → Perdido, com arrastar e soltar." },
+          { icon: MessageCircle, title: "WhatsApp direto", text: "Cada lead abre conversa no wa.me com um clique, direto da ficha." },
+          { icon: FileSpreadsheet, title: "Exportação pronta", text: "Listas filtradas em CSV e XLSX para o seu time comercial." },
+        ].map(feature => {
+          const Icon = feature.icon;
+          return <article key={feature.title} className="panel-glass sales-feature"><span className="metric-icon cyan"><Icon size={20} /></span><div><strong>{feature.title}</strong><p>{feature.text}</p></div></article>;
+        })}
+      </section>
+
+      <section className="sales-plans" id="planos">
+        <p className="eyebrow"><Target size={15} /> PLANOS</p>
+        <h2>Escolha a sua <em>órbita.</em></h2>
+        <div className="plans-grid">
+          {planOrder.map(planId => {
+            const plan = PLANS[planId];
+            const highlight = planId === "growth";
+            return (
+              <article key={planId} className={`panel-glass plan-card${highlight ? " plan-highlight" : ""}`}>
+                {highlight && <span className="plan-badge">MAIS ESCOLHIDO</span>}
+                <p className="eyebrow">{plan.name.toUpperCase()}</p>
+                <p className="plan-price">{formatPrice(plan.price)}{plan.price > 0 && <small>/mês</small>}</p>
+                <p className="plan-tagline">{plan.tagline}</p>
+                <ul>{plan.features.map(item => <li key={item}><Check size={14} /> {item}</li>)}</ul>
+                <button className={`btn ${highlight ? "cosmic-primary" : "subtle-btn"}`} onClick={onRegister}>{plan.price === 0 ? "Criar conta grátis" : `Assinar ${plan.name}`}</button>
+              </article>
+            );
+          })}
+        </div>
+        <p className="form-hint"><Sparkles size={14} /> Contas e upgrades de plano são ativados pelo time Orbital após a confirmação do pagamento.</p>
+      </section>
+
+      <footer className="sales-footer"><span>ORBITAL LEADS · Prospecção B2B em órbita</span><button className="link-btn" onClick={onLogin}>Entrar na plataforma</button></footer>
+    </main>
+  );
+}
+
+function AuthPage({ onAuthenticated, initialMode = "login", onShowPlans }: { onAuthenticated: (user: CurrentUser) => void; initialMode?: "login" | "register"; onShowPlans?: () => void }) {
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const login = trpc.auth.login.useMutation({ onSuccess: onAuthenticated });
   const register = trpc.auth.register.useMutation({ onSuccess: onAuthenticated });
@@ -119,7 +266,7 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (user: CurrentUser) =>
     event.preventDefault();
     try {
       if (mode === "login") await login.mutateAsync({ email, password });
-      else await register.mutateAsync({ name, email, password });
+      else await register.mutateAsync({ name, email, phone, password });
     } catch {
       // A mensagem devolvida pela API é apresentada no formulário.
     }
@@ -160,6 +307,9 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (user: CurrentUser) =>
               <label>Nome completo<input autoComplete="name" value={name} onChange={e => setName(e.target.value)} minLength={2} required placeholder="Ex.: Sofia Martins" /></label>
             )}
             <label>Email<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="voce@empresa.com" /></label>
+            {mode === "register" && (
+              <label>Telefone / WhatsApp<input autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} required minLength={8} maxLength={32} placeholder="Ex.: +55 19 99999-0000" /></label>
+            )}
             <label>Palavra-passe<input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === "register" ? 8 : 1} placeholder="••••••••" /></label>
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="btn btn-primary cosmic-primary w-100" disabled={isPending} type="submit">
@@ -168,6 +318,7 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (user: CurrentUser) =>
             </button>
           </form>
           <p className="auth-note"><LockKeyhole size={14} /> Credenciais protegidas por hash bcrypt e sessão JWT.</p>
+          {onShowPlans && <p className="auth-note"><button className="link-btn" type="button" onClick={onShowPlans}>← Voltar aos planos</button></p>}
         </div>
       </section>
     </main>
@@ -218,6 +369,7 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
   const [contactDetails, setContactDetails] = useState("");
   const [profileName, setProfileName] = useState(user.name ?? "");
   const [profileEmail, setProfileEmail] = useState(user.email ?? "");
+  const [profilePhone, setProfilePhone] = useState(user.phone ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const columnsRef = useRef<Record<PipelineStatus, HTMLDivElement | null>>({
@@ -234,6 +386,7 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
   const leadsQuery = trpc.leads.list.useQuery(filters);
   const metricsQuery = trpc.leads.metrics.useQuery();
   const historyQuery = trpc.places.history.useQuery();
+  const quotaQuery = trpc.places.quota.useQuery();
   const detailInput = useMemo(() => ({ leadId: activeLeadId ?? 1 }), [activeLeadId]);
   const detailQuery = trpc.leads.details.useQuery(detailInput, { enabled: activeLeadId !== null });
 
@@ -335,7 +488,9 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
     return groups;
   }, [leadsQuery.data]);
 
-  const activeLabel = navItems.find(item => item.view === view)?.label ?? "Dashboard";
+  const isAdmin = user.role === "admin";
+  const visibleNav = isAdmin ? [...navItems, adminNavItem] : navItems;
+  const activeLabel = [...navItems, adminNavItem].find(item => item.view === view)?.label ?? "Dashboard";
   const dashboardMetrics = metricsQuery.data ?? { total: 0, byStatus: [] };
 
   function handleSearch(event: FormEvent) {
@@ -357,7 +512,7 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
       <aside className={`side-rail ${mobileNavOpen ? "open" : ""}`}>
         <div className="brand-lockup"><div className="brand-mark"><Rocket size={19} /></div><span>ORBITAL<span>LEADS</span></span></div>
         <div className="side-caption">CENTRO DE COMANDO</div>
-        <AppNavigation view={view} onNavigate={nextView => { setView(nextView); setMobileNavOpen(false); }} />
+        <AppNavigation view={view} onNavigate={nextView => { setView(nextView); setMobileNavOpen(false); }} items={visibleNav} />
         <div className="side-footer">
           <div className="user-mini"><span className="avatar-orb">{(user.name ?? user.email ?? "U").slice(0, 1).toUpperCase()}</span><span><strong>{user.name ?? "Utilizador"}</strong><small>{user.email}</small></span></div>
           <button className="logout-button" onClick={onLogout}><LogOut size={17} /> Terminar sessão</button>
@@ -386,6 +541,7 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
         {view === "search" && (
           <section className="search-page">
             <div className="search-hero"><p className="eyebrow"><MapPin size={15} /> GOOGLE PLACES</p><h1>Defina a sua próxima <em>coordenada.</em></h1><p>Pesquise empresas por segmento e localização. Os campos <strong>Nome, Telefone, Endereço completo, Website, Avaliação e Status</strong> são gravados automaticamente no seu CRM.</p></div>
+            {quotaQuery.data && <QuotaBanner quota={quotaQuery.data} />}
             <article className="search-console panel-glass"><form onSubmit={handleSearch}><div className="search-fields"><label>Segmento / Nicho<input value={segment} onChange={e => setSegment(e.target.value)} placeholder="Ex.: Pizzarias" required /></label><label>Cidade<input value={city} onChange={e => setCity(e.target.value)} placeholder="Ex.: Lisboa" required /></label><label>Estado (UF)<input value={state} onChange={e => setState(e.target.value.toUpperCase())} maxLength={8} placeholder="Ex.: SP" required /></label></div><button className="btn cosmic-primary search-submit" disabled={searchMutation.isPending}>{searchMutation.isPending ? <><Loader2 className="spin" size={17} /> A consultar a galáxia...</> : <><SearchIcon size={17} /> Capturar leads</>}</button></form><p className="form-hint"><Sparkles size={14} /> A captura usa o Google Places no servidor e associa todos os resultados apenas ao seu tenant.</p></article>
             <article className="history-panel panel-glass"><div className="panel-heading"><div><p className="eyebrow">MEMÓRIA DE VOO</p><h3>Histórico de buscas</h3></div><History size={20} /></div>{historyQuery.isLoading ? <LoadingLine /> : historyQuery.isError ? <QueryError text="Não foi possível carregar o histórico de buscas." onRetry={() => historyQuery.refetch()} /> : historyQuery.data?.length ? <div className="history-list">{historyQuery.data.map(item => <div className="history-item" key={item.id}><span className="history-orb"><SearchIcon size={15} /></span><div><strong>{item.segment}</strong><p>{item.city}, {item.state} <span>·</span> {item.resultCount} leads</p></div><span className="history-date">{formatDate(item.createdAt)}</span><button className="icon-action" onClick={() => rerunMutation.mutate({ searchId: item.id })} disabled={rerunMutation.isPending} title="Repetir busca"><Rocket size={16} /></button></div>)}</div> : <EmptyState icon={<History size={28} />} text="As suas pesquisas recentes vão aparecer aqui." />}</article>
           </section>
@@ -402,7 +558,11 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
         )}
 
         {view === "settings" && (
-          <section className="settings-page"><div className="settings-hero"><p className="eyebrow"><Settings size={15} /> IDENTIDADE DO UTILIZADOR</p><h1>Configurações de <em>conta.</em></h1><p>Atualize os seus dados e mantenha as credenciais protegidas.</p></div><div className="settings-grid"><article className="settings-card panel-glass"><div className="panel-heading"><div><p className="eyebrow">PERFIL</p><h3>Dados pessoais</h3></div><UserRound size={20} /></div><form onSubmit={event => { event.preventDefault(); profileMutation.mutate({ name: profileName, email: profileEmail }); }}><label>Nome<input value={profileName} onChange={e => setProfileName(e.target.value)} minLength={2} required /></label><label>Email<input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} required /></label><button className="btn cosmic-primary" disabled={profileMutation.isPending}>{profileMutation.isPending ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />} Guardar perfil</button></form></article><article className="settings-card panel-glass"><div className="panel-heading"><div><p className="eyebrow">SEGURANÇA</p><h3>Alterar palavra-passe</h3></div><KeyRound size={20} /></div><form onSubmit={event => { event.preventDefault(); passwordMutation.mutate({ currentPassword, newPassword }); }}><label>Palavra-passe atual<input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required /></label><label>Nova palavra-passe<input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={8} required /></label><button className="btn cosmic-primary" disabled={passwordMutation.isPending}>{passwordMutation.isPending ? <Loader2 className="spin" size={16} /> : <LockKeyhole size={16} />} Atualizar palavra-passe</button></form></article></div></section>
+          <section className="settings-page"><div className="settings-hero"><p className="eyebrow"><Settings size={15} /> IDENTIDADE DO UTILIZADOR</p><h1>Configurações de <em>conta.</em></h1><p>Atualize os seus dados e mantenha as credenciais protegidas.</p></div><div className="settings-grid"><article className="settings-card panel-glass"><div className="panel-heading"><div><p className="eyebrow">PERFIL</p><h3>Dados pessoais</h3></div><UserRound size={20} /></div><form onSubmit={event => { event.preventDefault(); profileMutation.mutate({ name: profileName, email: profileEmail, phone: profilePhone || undefined }); }}><label>Nome<input value={profileName} onChange={e => setProfileName(e.target.value)} minLength={2} required /></label><label>Email<input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} required /></label><label>Telefone<input value={profilePhone} onChange={e => setProfilePhone(e.target.value)} minLength={8} maxLength={32} placeholder="+55 19 99999-0000" /></label><p className="form-hint">Plano atual: <strong>{PLANS[user.plan]?.name ?? user.plan}</strong></p><button className="btn cosmic-primary" disabled={profileMutation.isPending}>{profileMutation.isPending ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />} Guardar perfil</button></form></article><article className="settings-card panel-glass"><div className="panel-heading"><div><p className="eyebrow">SEGURANÇA</p><h3>Alterar palavra-passe</h3></div><KeyRound size={20} /></div><form onSubmit={event => { event.preventDefault(); passwordMutation.mutate({ currentPassword, newPassword }); }}><label>Palavra-passe atual<input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required /></label><label>Nova palavra-passe<input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={8} required /></label><button className="btn cosmic-primary" disabled={passwordMutation.isPending}>{passwordMutation.isPending ? <Loader2 className="spin" size={16} /> : <LockKeyhole size={16} />} Atualizar palavra-passe</button></form></article></div></section>
+        )}
+
+        {view === "admin" && (
+          isAdmin ? <AdminPanel /> : <section className="settings-page"><QueryError text="Área restrita ao administrador." onRetry={() => setView("dashboard")} /></section>
         )}
       </section>
 
@@ -426,6 +586,7 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
 function App() {
   const utils = trpc.useUtils();
   const meQuery = trpc.auth.me.useQuery();
+  const [authScreen, setAuthScreen] = useState<"plans" | "login" | "register">("plans");
   const logout = trpc.auth.logout.useMutation({
     onSuccess: async () => { utils.auth.me.setData(undefined, null); await utils.auth.me.invalidate(); },
   });
@@ -433,8 +594,9 @@ function App() {
   if (meQuery.isLoading) return <div className="initial-loader"><Rocket size={28} /><span>Preparar centro de comando...</span></div>;
   const requestedPreview = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("preview") : null;
   const previewView = navItems.some(item => item.view === requestedPreview) ? requestedPreview as ActiveView : null;
-  const previewUser: CurrentUser = { id: 0, name: "Pré-visualização", email: "preview@local.dev", role: "user" };
-  return <><Toaster richColors position="top-right" theme="dark" />{meQuery.data ? <AppShell user={meQuery.data} onLogout={() => logout.mutate()} /> : previewView ? <AppShell user={previewUser} initialView={previewView} onLogout={() => { window.location.href = "/"; }} /> : <AuthPage onAuthenticated={user => { utils.auth.me.setData(undefined, user); }} />}</>;
+  const previewUser: CurrentUser = { id: 0, name: "Pré-visualização", email: "preview@local.dev", phone: null, role: "user", plan: "scale" };
+  const authenticate = (user: CurrentUser) => { utils.auth.me.setData(undefined, user); };
+  return <><Toaster richColors position="top-right" theme="dark" />{meQuery.data ? <AppShell user={meQuery.data} onLogout={() => logout.mutate()} /> : previewView ? <AppShell user={previewUser} initialView={previewView} onLogout={() => { window.location.href = "/"; }} /> : authScreen === "plans" ? <SalesPage onLogin={() => setAuthScreen("login")} onRegister={() => setAuthScreen("register")} /> : <AuthPage initialMode={authScreen} onShowPlans={() => setAuthScreen("plans")} onAuthenticated={authenticate} />}</>;
 }
 
 export default App;

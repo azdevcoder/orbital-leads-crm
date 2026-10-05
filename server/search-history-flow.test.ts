@@ -6,8 +6,9 @@ const dbMocks = vi.hoisted(() => ({
   getSearchById: vi.fn(),
   upsertCapturedLeads: vi.fn(),
   createSearchHistory: vi.fn(),
+  recordSearchUsage: vi.fn(),
 }));
-const mapMocks = vi.hoisted(() => ({ makeRequest: vi.fn() }));
+const mapMocks = vi.hoisted(() => ({ searchPlacesNew: vi.fn() }));
 
 vi.mock("./db", () => dbMocks);
 vi.mock("./_core/map", () => mapMocks);
@@ -16,7 +17,7 @@ import { appRouter } from "./routers";
 
 function tenantContext(): TrpcContext {
   return {
-    user: { id: 3, openId: "tenant-history", name: "Histórico", email: "h@empresa.pt", passwordHash: "hash", loginMethod: "email", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
+    user: { id: 3, openId: "tenant-history", name: "Histórico", email: "h@empresa.pt", phone: null, passwordHash: "hash", loginMethod: "email", role: "user", plan: "scale", quotaDay: null, dailySearches: 0, dailyLeads: 0, totalSearches: 0, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
     req: {} as TrpcContext["req"],
     res: {} as TrpcContext["res"],
   };
@@ -39,15 +40,16 @@ describe("histórico de buscas por tenant", () => {
 
   it("repete uma busca pertencente ao tenant autenticado", async () => {
     dbMocks.getSearchById.mockResolvedValue({ id: 12, segment: "Clínicas", city: "Braga", state: "PT" });
-    mapMocks.makeRequest
-      .mockResolvedValueOnce({ status: "OK", results: [{ place_id: "repeat-place", name: "Clínica Teste", formatted_address: "Braga", types: [], geometry: { location: { lat: 0, lng: 0 } } }] })
-      .mockResolvedValueOnce({ status: "OK", result: { place_id: "repeat-place", name: "Clínica Teste", formatted_address: "Braga", geometry: { location: { lat: 0, lng: 0 } } } });
+    mapMocks.searchPlacesNew.mockResolvedValue({
+      places: [{ id: "repeat-place", displayName: { text: "Clínica Teste" }, formattedAddress: "Braga" }],
+    });
 
     const result = await appRouter.createCaller(tenantContext()).places.rerun({ searchId: 12 });
 
     expect(result.saved).toBe(1);
     expect(dbMocks.getSearchById).toHaveBeenCalledWith("tenant-history", 12);
     expect(dbMocks.upsertCapturedLeads).toHaveBeenCalledWith("tenant-history", expect.any(Array));
+    expect(dbMocks.recordSearchUsage).toHaveBeenCalledWith("tenant-history", 1);
     expect(dbMocks.createSearchHistory).toHaveBeenCalledWith(expect.objectContaining({ tenantId: "tenant-history", segment: "Clínicas" }));
   });
 });

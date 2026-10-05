@@ -52,7 +52,7 @@ describe("auth local", () => {
       password: "palavra-passe-segura",
     });
 
-    expect(result).toEqual({ id: 9, name: "Utilizador de Teste", email: "teste@empresa.pt", role: "user" });
+    expect(result).toEqual({ id: 9, name: "Utilizador de Teste", email: "teste@empresa.pt", phone: null, role: "user", plan: "free" });
     expect(bcryptMocks.compare).toHaveBeenCalledWith("palavra-passe-segura", "stored-hash");
     expect(sdkMocks.createSessionToken).toHaveBeenCalledWith("local-tenant-9", { name: "Utilizador de Teste" });
     expect(cookies).toEqual([{ name: COOKIE_NAME, value: "jwt-local-token" }]);

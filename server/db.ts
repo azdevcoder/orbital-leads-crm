@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
+import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import {
@@ -11,6 +12,7 @@ import {
   searches,
   users,
 } from "../drizzle/schema";
+import { planOf, todayKey, type PlanId } from "../shared/plans";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -94,7 +96,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 export async function createLocalUser(input: {
   name: string;
   email: string;
+  phone: string;
   passwordHash: string;
+  plan?: PlanId;
 }) {
   const db = await requireDb();
   const email = input.email.trim().toLowerCase();
@@ -103,11 +107,74 @@ export async function createLocalUser(input: {
     openId,
     name: input.name.trim(),
     email,
+    phone: input.phone.trim(),
     passwordHash: input.passwordHash,
     loginMethod: "email",
+    plan: planOf(input.plan).id,
     lastSignedIn: new Date(),
   });
   return getUserByOpenId(openId);
+}
+
+/** Regista uma busca concluída nos contadores de cota do tenant. */
+export async function recordSearchUsage(openId: string, saved: number) {
+  const db = await requireDb();
+  const user = await getUserByOpenId(openId);
+  if (!user) return;
+  const today = todayKey();
+  const sameDay = user.quotaDay === today;
+  await db
+    .update(users)
+    .set({
+      quotaDay: today,
+      dailySearches: (sameDay ? user.dailySearches : 0) + 1,
+      dailyLeads: (sameDay ? user.dailyLeads : 0) + saved,
+      totalSearches: user.totalSearches + 1,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.openId, openId));
+}
+
+export async function listAllUsers() {
+  const db = await requireDb();
+  return db.select().from(users).orderBy(desc(users.createdAt));
+}
+
+export async function setUserPlan(openId: string, plan: PlanId) {
+  const db = await requireDb();
+  await db
+    .update(users)
+    .set({ plan: planOf(plan).id, updatedAt: new Date() })
+    .where(eq(users.openId, openId));
+  return getUserByOpenId(openId);
+}
+
+/** Garante a conta administradora no arranque (via ADMIN_EMAIL/ADMIN_PASSWORD). */
+export async function ensureAdminUser(email: string, password: string, name = "Administrador") {
+  const db = await requireDb();
+  const normalized = email.trim().toLowerCase();
+  const existing = await getUserByEmail(normalized);
+  if (existing) {
+    if (existing.role !== "admin" || existing.plan !== "scale") {
+      await db
+        .update(users)
+        .set({ role: "admin", plan: "scale", updatedAt: new Date() })
+        .where(eq(users.id, existing.id));
+    }
+    return getUserByEmail(normalized);
+  }
+  const passwordHash = await bcrypt.hash(password, 12);
+  await db.insert(users).values({
+    openId: `local_${randomUUID()}`,
+    name,
+    email: normalized,
+    passwordHash,
+    loginMethod: "email",
+    role: "admin",
+    plan: "scale",
+    lastSignedIn: new Date(),
+  });
+  return getUserByEmail(normalized);
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -129,12 +196,13 @@ export async function getUserByEmail(email: string) {
 
 export async function updateUserProfile(
   userId: number,
-  input: { name?: string; email?: string }
+  input: { name?: string; email?: string; phone?: string }
 ) {
   const db = await requireDb();
-  const values: { name?: string; email?: string; updatedAt: Date } = { updatedAt: new Date() };
+  const values: { name?: string; email?: string; phone?: string; updatedAt: Date } = { updatedAt: new Date() };
   if (input.name !== undefined) values.name = input.name.trim();
   if (input.email !== undefined) values.email = input.email.trim().toLowerCase();
+  if (input.phone !== undefined) values.phone = input.phone.trim();
   await db.update(users).set(values).where(eq(users.id, userId));
   const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   return result[0];

@@ -19,7 +19,7 @@ const trpcMocks = vi.hoisted(() => {
         list: { useQuery: () => query([lead]) }, metrics: { useQuery: () => query({ total: 1, byStatus: [{ status: "Novo", count: 1 }] }) }, details: { useQuery: () => query({ lead, notes: [], contacts: [] }) },
         updateStatus: { useMutation: () => trpcMocks.status }, addNote: { useMutation: () => trpcMocks.note }, addContact: { useMutation: () => trpcMocks.contact }, updateNote: { useMutation: () => trpcMocks.updateNote }, export: { useMutation: () => trpcMocks.export },
       },
-      places: { history: { useQuery: () => query([]) }, search: { useMutation: () => trpcMocks.search }, rerun: { useMutation: () => trpcMocks.rerun } },
+      places: { history: { useQuery: () => query([]) }, quota: { useQuery: () => query({ plan: { name: "Scale" }, allowed: true, reason: null, searchesLeft: null, leadsLeft: null }) }, search: { useMutation: () => trpcMocks.search }, rerun: { useMutation: () => trpcMocks.rerun } },
       auth: { updateProfile: { useMutation: () => trpcMocks.profile }, changePassword: { useMutation: () => trpcMocks.password } },
     },
   };
@@ -35,7 +35,7 @@ describe("painel autenticado integrado", () => {
 
   it("navega pela sidebar e executa ações de CRM no ecrã real", async () => {
     const user = userEvent.setup();
-    render(<AppShell user={{ id: 1, name: "Conta Real", email: "conta@empresa.pt", role: "user" }} onLogout={vi.fn()} />);
+    render(<AppShell user={{ id: 1, name: "Conta Real", email: "conta@empresa.pt", phone: null, role: "user", plan: "scale" }} onLogout={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "Buscar Leads" }));
     expect(screen.getByRole("heading", { name: /defina a sua próxima/i })).toBeVisible();

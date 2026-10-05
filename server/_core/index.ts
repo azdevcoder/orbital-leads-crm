@@ -5,8 +5,21 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
+import { ensureAdminUser } from "../db";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+
+async function ensureAdmin() {
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD ?? "";
+  if (!email || !password) return;
+  try {
+    await ensureAdminUser(email, password);
+    console.log(`[Admin] conta administradora garantida para ${email}`);
+  } catch (error) {
+    console.warn("[Admin] não foi possível garantir a conta administradora:", error);
+  }
+}
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -55,6 +68,8 @@ async function startServer() {
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  await ensureAdmin();
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

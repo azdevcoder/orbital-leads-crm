@@ -4,13 +4,14 @@ import { Parser } from "json2csv";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
+import { checkSearchQuota, PLAN_IDS, planOf, type PlanId } from "@shared/plans";
 import { PIPELINE_STATUSES, type PipelineStatus } from "../drizzle/schema";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { searchPlacesNew } from "./_core/map";
 import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
 const statusSchema = z.enum(PIPELINE_STATUSES);
 const leadFiltersSchema = z.object({
@@ -21,8 +22,22 @@ const leadFiltersSchema = z.object({
   selectedIds: z.array(z.number().int().positive()).max(500).optional(),
 });
 
-function safeUser(user: { id: number; name: string | null; email: string | null; role: "user" | "admin" }) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+function safeUser(user: { id: number; name: string | null; email: string | null; phone?: string | null; role: "user" | "admin"; plan?: string | null }) {
+  return { id: user.id, name: user.name, email: user.email, phone: user.phone ?? null, role: user.role, plan: planOf(user.plan).id };
+}
+
+function safeAdminUser(user: {
+  id: number; openId: string; name: string | null; email: string | null; phone: string | null;
+  role: "user" | "admin"; plan: string | null; quotaDay: string | null;
+  dailySearches: number; dailyLeads: number; totalSearches: number;
+  createdAt: Date; lastSignedIn: Date;
+}) {
+  return {
+    id: user.id, openId: user.openId, name: user.name, email: user.email, phone: user.phone,
+    role: user.role, plan: planOf(user.plan).id,
+    quotaDay: user.quotaDay, dailySearches: user.dailySearches, dailyLeads: user.dailyLeads,
+    totalSearches: user.totalSearches, createdAt: user.createdAt, lastSignedIn: user.lastSignedIn,
+  };
 }
 
 function setLocalSession(
@@ -48,10 +63,11 @@ async function searchAndCapture(input: {
   segment: string;
   city: string;
   state: string;
+  maxResults: number;
 }) {
   const query = `${input.segment} em ${input.city}, ${input.state}`;
   // Places API (New): o searchText já devolve telefone/website na field mask.
-  const search = await searchPlacesNew(query, 20);
+  const search = await searchPlacesNew(query, input.maxResults);
   const details = (search.places ?? []).map(place => ({
     placeId: place.id,
     name: place.displayName?.text || "Sem nome",
@@ -66,7 +82,13 @@ async function searchAndCapture(input: {
   }));
 
   const saved = await db.upsertCapturedLeads(input.tenantId, details);
-  await db.createSearchHistory({ ...input, resultCount: saved });
+  await db.createSearchHistory({
+    tenantId: input.tenantId,
+    segment: input.segment,
+    city: input.city,
+    state: input.state,
+    resultCount: saved,
+  });
   return { saved, query };
 }
 
@@ -107,6 +129,7 @@ export const appRouter = router({
         z.object({
           name: z.string().trim().min(2, "Indique o seu nome.").max(160),
           email: z.string().trim().email("Indique um email válido.").max(320),
+          phone: z.string().trim().min(8, "Indique um telefone válido.").max(32),
           password: z.string().min(8, "A palavra-passe deve ter pelo menos 8 caracteres.").max(128),
         })
       )
@@ -116,7 +139,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "CONFLICT", message: "Já existe uma conta com este email." });
         }
         const passwordHash = await bcrypt.hash(input.password, 12);
-        const user = await db.createLocalUser({ name: input.name, email: input.email, passwordHash });
+        const user = await db.createLocalUser({ name: input.name, email: input.email, phone: input.phone, passwordHash });
         if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível criar a conta." });
         const token = await sdk.createSessionToken(user.openId, { name: user.name || input.name });
         setLocalSession(ctx.res, ctx.req, token);
@@ -149,6 +172,7 @@ export const appRouter = router({
         z.object({
           name: z.string().trim().min(2).max(160),
           email: z.string().trim().email().max(320),
+          phone: z.string().trim().min(8).max(32).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -185,25 +209,54 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const quota = checkSearchQuota(ctx.user);
+        if (!quota.allowed) {
+          throw new TRPCError({ code: "FORBIDDEN", message: quota.reason });
+        }
         try {
-          return await searchAndCapture({ ...input, tenantId: ctx.user.openId });
+          const result = await searchAndCapture({ ...input, tenantId: ctx.user.openId, maxResults: quota.maxResults });
+          await db.recordSearchUsage(ctx.user.openId, result.saved);
+          return result;
         } catch (error) {
           console.error("[Places] Lead capture failed", error);
           throw new TRPCError({ code: "BAD_GATEWAY", message: "Não foi possível consultar o Google Places neste momento." });
         }
       }),
     history: protectedProcedure.query(({ ctx }) => db.listSearchHistory(ctx.user.openId)),
+    quota: protectedProcedure.query(({ ctx }) => {
+      const check = checkSearchQuota(ctx.user);
+      return {
+        plan: check.plan,
+        allowed: check.allowed,
+        reason: check.reason ?? null,
+        maxResults: check.maxResults,
+        searchesLeft: check.searchesLeft,
+        leadsLeft: check.leadsLeft,
+      };
+    }),
     rerun: protectedProcedure
       .input(z.object({ searchId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         const history = await db.getSearchById(ctx.user.openId, input.searchId);
         if (!history) throw new TRPCError({ code: "NOT_FOUND", message: "Busca não encontrada." });
-        return searchAndCapture({
-          tenantId: ctx.user.openId,
-          segment: history.segment,
-          city: history.city,
-          state: history.state,
-        });
+        const quota = checkSearchQuota(ctx.user);
+        if (!quota.allowed) {
+          throw new TRPCError({ code: "FORBIDDEN", message: quota.reason });
+        }
+        try {
+          const result = await searchAndCapture({
+            tenantId: ctx.user.openId,
+            segment: history.segment,
+            city: history.city,
+            state: history.state,
+            maxResults: quota.maxResults,
+          });
+          await db.recordSearchUsage(ctx.user.openId, result.saved);
+          return result;
+        } catch (error) {
+          console.error("[Places] Lead capture failed", error);
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "Não foi possível consultar o Google Places neste momento." });
+        }
       }),
   }),
   leads: router({
@@ -291,6 +344,45 @@ export const appRouter = router({
           mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           base64: Buffer.from(buffer).toString("base64"),
         };
+      }),
+  }),
+  admin: router({
+    listUsers: adminProcedure.query(async () => {
+      const users = await db.listAllUsers();
+      return users.map(safeAdminUser);
+    }),
+    createUser: adminProcedure
+      .input(
+        z.object({
+          name: z.string().trim().min(2, "Indique o nome.").max(160),
+          email: z.string().trim().email("Indique um email válido.").max(320),
+          phone: z.string().trim().min(8, "Indique um telefone válido.").max(32),
+          password: z.string().min(8, "Mínimo 8 caracteres.").max(128),
+          plan: z.enum(PLAN_IDS).default("free"),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const existing = await db.getUserByEmail(input.email);
+        if (existing) {
+          throw new TRPCError({ code: "CONFLICT", message: "Já existe uma conta com este email." });
+        }
+        const passwordHash = await bcrypt.hash(input.password, 12);
+        const user = await db.createLocalUser({
+          name: input.name,
+          email: input.email,
+          phone: input.phone,
+          passwordHash,
+          plan: input.plan as PlanId,
+        });
+        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível criar a conta." });
+        return safeAdminUser(user);
+      }),
+    setPlan: adminProcedure
+      .input(z.object({ openId: z.string().min(1), plan: z.enum(PLAN_IDS) }))
+      .mutation(async ({ input }) => {
+        const user = await db.setUserPlan(input.openId, input.plan as PlanId);
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Utilizador não encontrado." });
+        return safeAdminUser(user);
       }),
   }),
 });
