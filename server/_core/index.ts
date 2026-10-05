@@ -43,6 +43,10 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // Sem VITE_APP_ID os tokens saem com appId vazio e TODA sessão é rejeitada.
+  if (!process.env.VITE_APP_ID) {
+    console.warn("[Auth] VITE_APP_ID ausente: defina no .env ou as sessões falharão.");
+  }
   // Atrás do Cloudflare Tunnel: req.protocol reflete X-Forwarded-Proto.
   app.set("trust proxy", 1);
   const server = createServer(app);
