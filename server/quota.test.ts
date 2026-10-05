@@ -36,7 +36,8 @@ describe("recursos por plano", () => {
     expect(planHasWhatsapp("start")).toBe(false);
     expect(planHasCrm("free")).toBe(true);
     expect(planHasExport("free")).toBe(true);
-    expect(planHasWhatsapp("free")).toBe(false);
+    expect(planHasWhatsapp("free")).toBe(true);
+    expect(planHasWhatsapp("start")).toBe(false);
     expect(planHasWhatsapp("plus")).toBe(true);
     expect(planHasCrm("scale")).toBe(true);
   });

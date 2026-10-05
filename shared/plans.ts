@@ -35,6 +35,7 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     features: [
       "1 busca com até 10 leads",
       "CRM completo com Kanban",
+      "Ação direta no WhatsApp",
       "Exportação CSV e XLSX",
     ],
   },
@@ -181,5 +182,5 @@ export function planHasExport(plan: string | null | undefined): boolean {
 
 export function planHasWhatsapp(plan: string | null | undefined): boolean {
   const id = planOf(plan).id;
-  return id === "plus" || id === "scale";
+  return id === "free" || id === "plus" || id === "scale";
 }

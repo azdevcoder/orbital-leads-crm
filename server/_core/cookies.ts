@@ -11,6 +11,10 @@ function isIpAddress(host: string) {
 function isSecureRequest(req: Request) {
   if (req.protocol === "https") return true;
 
+  // Cloudflare Tunnel: esquema original em CF-Visitor {"scheme":"https"}.
+  const cfVisitor = req.headers["cf-visitor"];
+  if (typeof cfVisitor === "string" && cfVisitor.includes('"scheme":"https"')) return true;
+
   const forwardedProto = req.headers["x-forwarded-proto"];
   if (!forwardedProto) return false;
 
