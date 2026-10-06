@@ -3,14 +3,18 @@
  * Partilhado entre servidor (fiscalização) e cliente (página de vendas, banners).
  */
 
-export const PLAN_IDS = ["free", "start", "plus", "scale"] as const;
+export const PLAN_IDS = ["free", "start", "plus", "scale", "plus_annual", "scale_annual", "lifetime"] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 
 export type PlanInfo = {
   id: PlanId;
   name: string;
-  price: number; // R$/mês
+  price: number; // R$ por ciclo de cobrança
+  /** Meses pagos no ciclo (1 = mensal, 12 = anual, null = vitalício). */
+  billingMonths: number | null;
   tagline: string;
+  /** Dias de validade por compra (null = nunca expira). */
+  validDays: number | null;
   /** Buscas por dia (null = ilimitado). */
   searchesPerDay: number | null;
   /** Leads capturados por dia (null = ilimitado). */
@@ -27,11 +31,13 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     id: "free",
     name: "Grátis",
     price: 0,
+    billingMonths: null,
     tagline: "Para experimentar a órbita",
     searchesPerDay: null,
     leadsPerDay: null,
     maxPerSearch: 10,
     lifetimeLeads: 10,
+    validDays: null,
     features: [
       "10 leads grátis no total",
       "CRM completo com Kanban",
@@ -43,11 +49,13 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     id: "start",
     name: "Start",
     price: 29.99,
+    billingMonths: 1,
     tagline: "Para quem prospecta todo dia",
     searchesPerDay: null,
     leadsPerDay: 50,
     maxPerSearch: 20,
     lifetimeLeads: null,
+    validDays: 30,
     features: [
       "Até 50 leads por dia",
       "Lista de leads com filtros",
@@ -57,11 +65,13 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     id: "plus",
     name: "Plus",
     price: 49.99,
+    billingMonths: 1,
     tagline: "Para operações em escala",
     searchesPerDay: null,
     leadsPerDay: 100,
     maxPerSearch: 20,
     lifetimeLeads: null,
+    validDays: 30,
     features: [
       "Até 100 leads por dia",
       "CRM completo com Kanban",
@@ -73,14 +83,75 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     id: "scale",
     name: "Scale",
     price: 99.99,
+    billingMonths: 1,
     tagline: "Prospecção sem teto",
     searchesPerDay: null,
     leadsPerDay: null,
     maxPerSearch: 50,
     lifetimeLeads: null,
+    validDays: 30,
     features: [
       "Buscas ilimitadas",
       "Leads ilimitados",
+      "CRM completo com Kanban",
+      "Ação direta no WhatsApp",
+      "Exportação CSV e XLSX",
+      "Suporte prioritário",
+    ],
+  },
+  plus_annual: {
+    id: "plus_annual",
+    name: "Plus Anual",
+    price: 499.9,
+    billingMonths: 12,
+    tagline: "Um ano de operação em escala",
+    searchesPerDay: null,
+    leadsPerDay: 100,
+    maxPerSearch: 20,
+    lifetimeLeads: null,
+    validDays: 365,
+    features: [
+      "Até 100 leads por dia, por 12 meses",
+      "CRM completo com Kanban",
+      "Ação direta no WhatsApp",
+      "Exportação CSV e XLSX",
+      "2 meses de desconto no ano",
+    ],
+  },
+  scale_annual: {
+    id: "scale_annual",
+    name: "Scale Anual",
+    price: 999.9,
+    billingMonths: 12,
+    tagline: "Um ano sem teto",
+    searchesPerDay: null,
+    leadsPerDay: null,
+    maxPerSearch: 50,
+    lifetimeLeads: null,
+    validDays: 365,
+    features: [
+      "Buscas ilimitadas por 12 meses",
+      "Leads ilimitados por 12 meses",
+      "CRM completo com Kanban",
+      "Ação direta no WhatsApp",
+      "Exportação CSV e XLSX",
+      "Suporte prioritário",
+    ],
+  },
+  lifetime: {
+    id: "lifetime",
+    name: "Vitalício",
+    price: 1999,
+    billingMonths: null,
+    tagline: "Acesso para sempre, pagamento único",
+    searchesPerDay: null,
+    leadsPerDay: null,
+    maxPerSearch: 50,
+    lifetimeLeads: null,
+    validDays: null,
+    features: [
+      "Buscas ilimitadas para sempre",
+      "Leads ilimitados para sempre",
       "CRM completo com Kanban",
       "Ação direta no WhatsApp",
       "Exportação CSV e XLSX",
@@ -206,16 +277,25 @@ export function formatPrice(value: number): string {
   return value === 0 ? "Grátis" : `R$ ${value.toFixed(2).replace(".", ",")}`;
 }
 
-/** Conta da padaria: leads/dia × 30 dias = leads/mês e custo por lead (truncado). */
+/** Conta da padaria: leads/dia × dias pagos = leads no período e custo por lead. */
 export function planEconomics(plan: PlanInfo): string | null {
-  if (plan.leadsPerDay === null || plan.price <= 0) return null;
-  const perMonth = plan.leadsPerDay * 30;
-  const perLead = Math.floor((plan.price / perMonth) * 1000) / 1000;
+  if (plan.leadsPerDay === null || plan.price <= 0 || plan.billingMonths === null) return null;
+  const days = 30 * plan.billingMonths;
+  const total = plan.leadsPerDay * days;
+  const perLead = Math.floor((plan.price / total) * 1000) / 1000;
+  const period = plan.billingMonths === 1 ? "mês" : "ano";
   return (
-    `${plan.leadsPerDay} leads/dia × 30 dias = ${perMonth.toLocaleString("pt-BR")} leads/mês · ` +
-    `R$ ${plan.price.toFixed(2).replace(".", ",")} / ${perMonth.toLocaleString("pt-BR")} = ` +
+    `${plan.leadsPerDay} leads/dia × ${days} dias = ${total.toLocaleString("pt-BR")} leads/${period === "mês" ? "mês" : "ano"} · ` +
+    `R$ ${plan.price.toFixed(2).replace(".", ",")} / ${total.toLocaleString("pt-BR")} = ` +
     `R$ ${perLead.toFixed(3).replace(".", ",")} por lead`
   );
+}
+
+/** Sufixo do preço: /mês, /ano ou pagamento único. */
+export function priceSuffix(plan: PlanInfo): string {
+  if (plan.price <= 0) return "";
+  if (plan.billingMonths === null) return "pagamento único";
+  return plan.billingMonths === 1 ? "/mês" : "/ano";
 }
 
 /** Recursos por plano: Start tem só busca + lista. */
@@ -228,6 +308,5 @@ export function planHasExport(plan: string | null | undefined): boolean {
 }
 
 export function planHasWhatsapp(plan: string | null | undefined): boolean {
-  const id = planOf(plan).id;
-  return id === "free" || id === "plus" || id === "scale";
+  return planOf(plan).id !== "start";
 }

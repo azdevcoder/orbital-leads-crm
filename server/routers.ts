@@ -534,7 +534,7 @@ export const appRouter = router({
     setPlan: adminProcedure
       .input(z.object({ openId: z.string().min(1), plan: z.enum(PLAN_IDS) }))
       .mutation(async ({ input }) => {
-        // Plano pago pelo admin vale 30 dias; Grátis limpa o vencimento.
+        // Plano pago pelo admin vale o ciclo do plano; Grátis limpa o vencimento.
         const plan = input.plan as PlanId;
         const user =
           plan === "free"
@@ -589,13 +589,16 @@ export const appRouter = router({
   }),
   cakto: router({
     checkout: publicProcedure
-      .input(z.object({ plan: z.enum(["start", "plus", "scale"]) }))
+      .input(z.object({ plan: z.enum(["start", "plus", "scale", "plus_annual", "scale_annual", "lifetime"]) }))
       .mutation(async ({ input }) => {
         // Gera token opaco, regista a intenção e devolve o checkout com ?callback=token.
         const base = {
           start: process.env.CAKTO_CHECKOUT_START ?? "",
           plus: process.env.CAKTO_CHECKOUT_PLUS ?? "",
           scale: process.env.CAKTO_CHECKOUT_SCALE ?? "",
+          plus_annual: process.env.CAKTO_CHECKOUT_PLUS_ANNUAL ?? "",
+          scale_annual: process.env.CAKTO_CHECKOUT_SCALE_ANNUAL ?? "",
+          lifetime: process.env.CAKTO_CHECKOUT_LIFETIME ?? "",
         }[input.plan];
         if (!base) {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Checkout deste plano ainda não configurado. Fale com o time Orbital." });

@@ -14,7 +14,7 @@ import {
   searches,
   users,
 } from "../drizzle/schema";
-import { planOf, todayKey, type PlanId } from "../shared/plans";
+import { PLANS, planOf, todayKey, type PlanId } from "../shared/plans";
 import { normalizePhoneDigits } from "../shared/phone";
 import type { RoleId } from "../shared/roles";
 import { ENV } from "./_core/env";
@@ -202,13 +202,15 @@ export async function setUserPlan(openId: string, plan: PlanId, expiresAt?: Date
   return getUserByOpenId(openId);
 }
 
-/** Garante +30 dias de plano (renova a partir do vencimento atual ou de hoje). */
-export async function ensurePlanExpiry(openId: string, plan: PlanId, days = 30) {
+/** Garante a validade do plano (renova a partir do vencimento atual ou de hoje). */
+export async function ensurePlanExpiry(openId: string, plan: PlanId, days?: number | null) {
   const user = await getUserByOpenId(openId);
   if (!user) return user;
+  const validity = days !== undefined ? days : (PLANS[planOf(plan).id].validDays ?? 30);
+  if (validity === null) return setUserPlan(openId, plan, null);
   const current = user.planExpiresAt ? new Date(user.planExpiresAt).getTime() : 0;
   const base = Math.max(current, Date.now());
-  return setUserPlan(openId, plan, new Date(base + days * 24 * 60 * 60 * 1000));
+  return setUserPlan(openId, plan, new Date(base + validity * 24 * 60 * 60 * 1000));
 }
 
 /** Edição completa pelo admin: perfil + plano + papel. */

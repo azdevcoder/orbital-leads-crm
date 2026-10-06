@@ -1,6 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { trpc } from "@/lib/trpc";
-import { PLANS, formatPrice, planEconomics, planHasCrm, planHasExport, planHasWhatsapp, type PlanId } from "@shared/plans";
+import { PLANS, formatPrice, planEconomics, planHasCrm, planHasExport, planHasWhatsapp, priceSuffix, type PlanId } from "@shared/plans";
 import { ROLE_IDS, ROLE_LABELS, roleLabel, type RoleId } from "@shared/roles";
 import {
   ArrowDown,
@@ -290,7 +290,7 @@ function downloadFromBase64(data: { filename: string; mimeType: string; base64: 
   URL.revokeObjectURL(url);
 }
 
-const planOrder: PlanId[] = ["free", "start", "plus", "scale"];
+const planOrder: PlanId[] = ["free", "start", "plus", "scale", "plus_annual", "scale_annual", "lifetime"];
 
 function SalesPage() {
   const checkout = trpc.cakto.checkout.useMutation({
@@ -336,7 +336,7 @@ function SalesPage() {
               <article key={planId} className={`panel-glass plan-card${highlight ? " plan-highlight" : ""}`}>
                 {highlight && <span className="plan-badge">MAIS ESCOLHIDO</span>}
                 <p className="eyebrow">{plan.name.toUpperCase()}</p>
-                <p className="plan-price">{formatPrice(plan.price)}{plan.price > 0 && <small>/mês</small>}</p>
+                <p className="plan-price">{formatPrice(plan.price)}{priceSuffix(plan) && <small>{priceSuffix(plan)}</small>}</p>
                 <p className="plan-tagline">{plan.tagline}</p>
                 {planEconomics(plan) && <p className="plan-econ">{planEconomics(plan)}</p>}
                 <ul>{plan.features.map(item => <li key={item}><Check size={14} /> {item}</li>)}</ul>

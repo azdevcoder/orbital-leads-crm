@@ -91,6 +91,24 @@ describe("cota de buscas", () => {
     expect(planEconomics(PLANS.scale)).toBeNull();
   });
 
+  it("anual mostra a conta em 360 dias; vitalício não expira", async () => {
+    const { planEconomics, PLANS } = await import("../shared/plans");
+    expect(planEconomics(PLANS.plus_annual)).toContain("36.000");
+    expect(planEconomics(PLANS.plus_annual)).toContain("R$ 0,013 por lead");
+    expect(planEconomics(PLANS.lifetime)).toBeNull();
+  });
+
+  it("vitalício nunca vence; anual vale 365 dias", () => {
+    const farFuture = new Date("2999-01-01").toISOString();
+    const life = checkSearchQuota(user({ plan: "lifetime", planExpiresAt: null, dailyLeads: 999999 }));
+    expect(life.expired).toBe(false);
+    expect(life.allowed).toBe(true);
+    const annual = checkSearchQuota(user({ plan: "scale_annual", planExpiresAt: farFuture, dailyLeads: 0 }));
+    expect(annual.expired).toBe(false);
+    expect(annual.allowed).toBe(true);
+    expect(annual.maxResults).toBe(50);
+  });
+
   it("plano pago vencido vale como Grátis e avisa a renovação", () => {
     const past = new Date(Date.now() - 86400000).toISOString();
     const check = checkSearchQuota(user({ plan: "start", planExpiresAt: past, totalLeads: 0 }));

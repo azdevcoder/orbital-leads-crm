@@ -11,6 +11,7 @@ const dbMocks = vi.hoisted(() => ({
   getCaktoPaymentByOrderId: vi.fn(),
   confirmCaktoPayment: vi.fn(),
   getUserByPhoneDigits: vi.fn(),
+  ensurePlanExpiry: vi.fn(),
 }));
 const sdkMocks = vi.hoisted(() => ({ createSessionToken: vi.fn() }));
 const bcryptMocks = vi.hoisted(() => ({ hash: vi.fn() }));
@@ -70,6 +71,10 @@ describe("webhook Cakto", () => {
   it("mapeia oferta ao plano por id e por preço", () => {
     expect(planForOffer({ id: "offer-plus-1", price: 0 })?.valueOf()).toBe("plus");
     expect(planForOffer({ id: "desconhecida", price: 99.99 })).toBe("scale");
+    process.env.CAKTO_OFFER_LIFETIME = "offer-life-1";
+    expect(planForOffer({ id: "offer-life-1", price: 0 })).toBe("lifetime");
+    expect(planForOffer({ id: "desconhecida", price: 1999 })).toBe("lifetime");
+    expect(planForOffer({ id: "desconhecida", price: 499.9 })).toBe("plus_annual");
     expect(planForOffer({ id: "desconhecida", price: 1 })).toBeNull();
     expect(planForOffer(null)).toBeNull();
   });
