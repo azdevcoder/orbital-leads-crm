@@ -329,7 +329,8 @@ function SalesPage() {
         <p className="eyebrow"><Target size={15} /> PLANOS</p>
         <h2>Escolha a sua <em>órbita.</em></h2>
         <div className="plans-grid">
-          {planOrder.map(planId => {
+          {/* Vitalício oculto até o lançamento: planOrder filtrado */}
+          {planOrder.filter(planId => planId !== "lifetime").map(planId => {
             const plan = PLANS[planId];
             const highlight = planId === "plus";
             return (
