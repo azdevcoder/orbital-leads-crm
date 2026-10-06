@@ -156,6 +156,11 @@ export const appRouter = router({
         if (existing) {
           throw new TRPCError({ code: "CONFLICT", message: "Já existe uma conta com este email." });
         }
+        try {
+          await db.assertPhoneAvailable(input.phone);
+        } catch {
+          throw new TRPCError({ code: "CONFLICT", message: "Este telefone já está em uso por outra conta." });
+        }
         // Anti-abuso: limite de contas gratuitas por IP (família/escritório ok, fazendas não).
         const signupIp =
           (typeof ctx.req.ip === "string" && ctx.req.ip) ||
@@ -183,13 +188,62 @@ export const appRouter = router({
           email: z.string().trim().email(),
           password: z.string().min(1).max(128),
         })
-      )
-      .mutation(async ({ ctx, input }) => {
+      )      .mutation(async ({ ctx, input }) => {
         const user = await db.getUserByEmail(input.email);
         if (!user?.passwordHash || !(await bcrypt.compare(input.password, user.passwordHash))) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Email ou palavra-passe inválidos." });
         }
         await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+        const token = await sdk.createSessionToken(user.openId, { name: user.name || user.email || "Utilizador" });
+        setLocalSession(ctx.res, ctx.req, token);
+        return safeUser(user);
+      }),
+    googleLogin: publicProcedure
+      .input(z.object({ idToken: z.string().min(1).max(8000) }))
+      .mutation(async ({ ctx, input }) => {
+        // Entrada via Google Identity Services (cria a conta se for o primeiro acesso).
+        const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID ?? "";
+        if (!clientId) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Login com Google não configurado." });
+        }
+        let info: { aud?: string; email?: string; email_verified?: string; name?: string } | null = null;
+        try {
+          const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(input.idToken)}`);
+          if (response.ok) info = (await response.json()) as typeof info;
+        } catch {
+          info = null;
+        }
+        if (!info || info.aud !== clientId || info.email_verified !== "true" || !info.email) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Falha na verificação do Google." });
+        }
+        const email = info.email.trim().toLowerCase();
+        let user = await db.getUserByEmail(email);
+        if (!user) {
+          const signupIp =
+            (typeof ctx.req.ip === "string" && ctx.req.ip) ||
+            ctx.req.socket?.remoteAddress ||
+            null;
+          if (signupIp) {
+            const used = await db.countAccountsByIp(signupIp);
+            if (used >= db.freeAccountsPerIpLimit()) {
+              throw new TRPCError({
+                code: "TOO_MANY_REQUESTS",
+                message: "Limite de contas gratuitas atingido nesta conexão. Fale com o time Orbital para liberar mais acessos.",
+              });
+            }
+          }
+          const passwordHash = await bcrypt.hash(nanoid(24), 12);
+          user = await db.createLocalUser({
+            name: (info.name ?? "").trim() || email.split("@")[0],
+            email,
+            phone: "-",
+            passwordHash,
+            plan: "free",
+            signupIp,
+            loginMethod: "google",
+          });
+        }
+        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível entrar com o Google." });
         const token = await sdk.createSessionToken(user.openId, { name: user.name || user.email || "Utilizador" });
         setLocalSession(ctx.res, ctx.req, token);
         return safeUser(user);
@@ -217,6 +271,11 @@ export const appRouter = router({
         const passwordHash = await bcrypt.hash(input.password, 12);
         let user = await db.getUserByEmail(email);
         if (!user) {
+          try {
+            await db.assertPhoneAvailable(payment.customerPhone);
+          } catch {
+            throw new TRPCError({ code: "CONFLICT", message: "Este telefone já está em uso por outra conta. Entre com a sua conta ou fale com o suporte." });
+          }
           user = await db.createLocalUser({
             name: (payment.customerName ?? "").trim() || email.split("@")[0],
             email,
@@ -247,6 +306,13 @@ export const appRouter = router({
         const emailOwner = await db.getUserByEmail(input.email);
         if (emailOwner && emailOwner.id !== ctx.user.id) {
           throw new TRPCError({ code: "CONFLICT", message: "Este email já está associado a outra conta." });
+        }
+        if (input.phone !== undefined) {
+          try {
+            await db.assertPhoneAvailable(input.phone, ctx.user.openId);
+          } catch {
+            throw new TRPCError({ code: "CONFLICT", message: "Este telefone já está em uso por outra conta." });
+          }
         }
         const user = await db.updateUserProfile(ctx.user.id, input);
         if (!user) throw new TRPCError({ code: "NOT_FOUND" });
@@ -444,6 +510,11 @@ export const appRouter = router({
         const existing = await db.getUserByEmail(input.email);
         if (existing) {
           throw new TRPCError({ code: "CONFLICT", message: "Já existe uma conta com este email." });
+        }
+        try {
+          await db.assertPhoneAvailable(input.phone);
+        } catch {
+          throw new TRPCError({ code: "CONFLICT", message: "Este telefone já está em uso por outra conta." });
         }
         const passwordHash = await bcrypt.hash(input.password, 12);
         const user = await db.createLocalUser({

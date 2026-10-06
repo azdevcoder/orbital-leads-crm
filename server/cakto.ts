@@ -73,13 +73,24 @@ export async function grantPlanAccess(input: {
     return existing;
   }
   const passwordHash = await bcryptHash(nanoid(24));
+  // Fluxo pago não pode quebrar por telefone duplicado: sem unicidade, sem dígitos.
+  const digits = await safePhoneDigits(input.phone);
   return db.createLocalUser({
     name: (input.name ?? "").trim() || email.split("@")[0],
     email,
     phone: (input.phone ?? "").trim() || "-",
+    phoneDigitsOverride: digits,
     passwordHash,
     plan: input.plan,
   });
+}
+
+async function safePhoneDigits(phone: string | null | undefined): Promise<string | null> {
+  const { normalizePhoneDigits } = await import("../shared/phone");
+  const digits = normalizePhoneDigits(phone);
+  if (!digits) return null;
+  const owner = await db.getUserByPhoneDigits(digits);
+  return owner ? null : digits;
 }
 
 async function bcryptHash(value: string): Promise<string> {

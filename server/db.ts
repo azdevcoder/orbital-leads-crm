@@ -15,6 +15,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { planOf, todayKey, type PlanId } from "../shared/plans";
+import { normalizePhoneDigits } from "../shared/phone";
 import type { RoleId } from "../shared/roles";
 import { ENV } from "./_core/env";
 
@@ -110,6 +111,9 @@ export async function createLocalUser(input: {
   passwordHash: string;
   plan?: PlanId;
   signupIp?: string | null;
+  loginMethod?: string;
+  /** Quando definido (inclusive null), ignora a normalização automática. */
+  phoneDigitsOverride?: string | null;
 }) {
   const db = await requireDb();
   const email = input.email.trim().toLowerCase();
@@ -120,12 +124,31 @@ export async function createLocalUser(input: {
     email,
     phone: input.phone.trim(),
     passwordHash: input.passwordHash,
-    loginMethod: "email",
+    loginMethod: input.loginMethod ?? "email",
     plan: planOf(input.plan).id,
     signupIp: input.signupIp?.trim().slice(0, 45) ?? null,
+    phoneDigits: "phoneDigitsOverride" in input ? input.phoneDigitsOverride : normalizePhoneDigits(input.phone),
     lastSignedIn: new Date(),
   });
   return getUserByOpenId(openId);
+}
+
+/** Conta não-admin dona destes dígitos de telefone (para unicidade). */
+export async function getUserByPhoneDigits(digits: string, excludeOpenId?: string) {
+  const db = await requireDb();
+  const conditions = [eq(users.phoneDigits, digits)];
+  if (excludeOpenId) conditions.push(ne(users.openId, excludeOpenId));
+  const result = await db.select().from(users).where(and(...conditions)).limit(1);
+  return result[0];
+}
+
+/** Garante telefone único (ignora quando não normalizável). */
+export async function assertPhoneAvailable(phone: string | null | undefined, excludeOpenId?: string) {
+  const digits = normalizePhoneDigits(phone);
+  if (!digits) return null;
+  const owner = await getUserByPhoneDigits(digits, excludeOpenId);
+  if (owner) throw new Error("Este telefone já está em uso por outra conta.");
+  return digits;
 }
 
 /** Quantas contas (não-admin) já nasceram deste IP — trava anti-abuso do Grátis. */
@@ -193,11 +216,20 @@ export async function adminUpdateUser(
     }
   }
   const values: {
-    name?: string; email?: string; phone?: string; plan?: string; role?: RoleId; updatedAt: Date;
+    name?: string; email?: string; phone?: string; phoneDigits?: string | null;
+    plan?: string; role?: RoleId; updatedAt: Date;
   } = { updatedAt: new Date() };
   if (input.name !== undefined) values.name = input.name.trim();
   if (input.email !== undefined) values.email = input.email.trim().toLowerCase();
-  if (input.phone !== undefined) values.phone = input.phone.trim();
+  if (input.phone !== undefined) {
+    const digits = normalizePhoneDigits(input.phone);
+    if (digits) {
+      const owner = await getUserByPhoneDigits(digits, openId);
+      if (owner) throw new Error("Este telefone já está em uso por outra conta.");
+    }
+    values.phone = input.phone.trim();
+    values.phoneDigits = digits;
+  }
   if (input.plan !== undefined) values.plan = planOf(input.plan).id;
   if (input.role !== undefined) values.role = input.role;
   await db.update(users).set(values).where(eq(users.openId, openId));
@@ -363,10 +395,13 @@ export async function updateUserProfile(
   input: { name?: string; email?: string; phone?: string }
 ) {
   const db = await requireDb();
-  const values: { name?: string; email?: string; phone?: string; updatedAt: Date } = { updatedAt: new Date() };
+  const values: { name?: string; email?: string; phone?: string; phoneDigits?: string | null; updatedAt: Date } = { updatedAt: new Date() };
   if (input.name !== undefined) values.name = input.name.trim();
   if (input.email !== undefined) values.email = input.email.trim().toLowerCase();
-  if (input.phone !== undefined) values.phone = input.phone.trim();
+  if (input.phone !== undefined) {
+    values.phone = input.phone.trim();
+    values.phoneDigits = normalizePhoneDigits(input.phone);
+  }
   await db.update(users).set(values).where(eq(users.id, userId));
   const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   return result[0];

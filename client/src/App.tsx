@@ -403,8 +403,42 @@ function AuthPage({ onAuthenticated, initialMode = "login" }: { onAuthenticated:
   const [password, setPassword] = useState("");
   const login = trpc.auth.login.useMutation({ onSuccess: onAuthenticated });
   const register = trpc.auth.register.useMutation({ onSuccess: onAuthenticated });
-  const isPending = login.isPending || register.isPending;
-  const error = login.error?.message ?? register.error?.message;
+  const googleLogin = trpc.auth.googleLogin.useMutation({ onSuccess: onAuthenticated });
+  const configQuery = trpc.system.config.useQuery();
+  const googleBtnRef = useRef<HTMLDivElement | null>(null);
+  const isPending = login.isPending || register.isPending || googleLogin.isPending;
+  const error = login.error?.message ?? register.error?.message ?? googleLogin.error?.message;
+  const googleClientId = configQuery.data?.googleClientId || "";
+
+  useEffect(() => {
+    if (!googleClientId || googleBtnRef.current?.dataset.ready) return;
+    const renderGoogleButton = () => {
+      const g = (window as unknown as { google?: { accounts: { id: {
+        initialize: (options: unknown) => void;
+        renderButton: (element: HTMLElement, options: unknown) => void;
+      } } } }).google;
+      const slot = googleBtnRef.current;
+      if (!g || !slot) return;
+      g.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response: { credential?: string }) => {
+          if (response?.credential) googleLogin.mutate({ idToken: response.credential });
+        },
+      });
+      g.accounts.id.renderButton(slot, { theme: "filled_black", size: "large", shape: "pill", width: 320 });
+      slot.dataset.ready = "1";
+    };
+    if ((window as unknown as { google?: unknown }).google) {
+      renderGoogleButton();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => renderGoogleButton();
+    document.body.appendChild(script);
+  }, [googleClientId, googleLogin]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -462,6 +496,9 @@ function AuthPage({ onAuthenticated, initialMode = "login" }: { onAuthenticated:
             </button>
           </form>
           <p className="auth-note"><LockKeyhole size={14} /> Credenciais protegidas por hash bcrypt e sessão JWT.</p>
+          {googleClientId && (
+            <><div className="auth-divider"><span>ou</span></div><div ref={googleBtnRef} className="google-btn-slot" /></>
+          )}
           <p className="auth-note"><a className="link-btn" href="/">← Voltar aos planos</a></p>
         </div>
       </section>

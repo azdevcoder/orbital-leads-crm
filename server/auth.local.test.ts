@@ -7,6 +7,8 @@ const dbMocks = vi.hoisted(() => ({
   upsertUser: vi.fn(),
   countAccountsByIp: vi.fn(),
   freeAccountsPerIpLimit: vi.fn(),
+  assertPhoneAvailable: vi.fn(),
+  getUserByPhoneDigits: vi.fn(),
 }));
 const bcryptMocks = vi.hoisted(() => ({ compare: vi.fn(), hash: vi.fn() }));
 const sdkMocks = vi.hoisted(() => ({ createSessionToken: vi.fn() }));
@@ -71,8 +73,7 @@ describe("auth local", () => {
     expect(cookies).toEqual([]);
   });
 
-  it("regista com IP e bloqueia a 3ª conta gratuita do mesmo IP", async () => {
-    dbMocks.getUserByEmail.mockResolvedValue(null);
+  it("regista com IP e bloqueia a 3ª conta gratuita do mesmo IP", async () => {    dbMocks.getUserByEmail.mockResolvedValue(null);
     dbMocks.countAccountsByIp.mockResolvedValue(1);
     dbMocks.freeAccountsPerIpLimit.mockReturnValue(2);
     bcryptMocks.hash.mockResolvedValue("hash-nova");
@@ -99,5 +100,95 @@ describe("auth local", () => {
       })
     ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
     expect(dbMocks.createLocalUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejeita telefone já usado por outra conta", async () => {
+    dbMocks.getUserByEmail.mockResolvedValue(null);
+    dbMocks.countAccountsByIp.mockResolvedValue(0);
+    dbMocks.freeAccountsPerIpLimit.mockReturnValue(2);
+    dbMocks.assertPhoneAvailable.mockRejectedValue(new Error("Este telefone já está em uso por outra conta."));
+    const { ctx } = publicContext();
+
+    await expect(
+      appRouter.createCaller(ctx).auth.register({
+        name: "Clone", email: "clone@empresa.pt", phone: "+55 (19) 99999-0000", password: "senha1234",
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(dbMocks.createLocalUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("login com Google", () => {
+  const tokeninfo = (overrides = {}) => ({
+    aud: "google-client-id",
+    email: "guser@example.com",
+    email_verified: "true",
+    name: "Usuária Google",
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_OAUTH_CLIENT_ID = "google-client-id";
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  function mockTokeninfo(payload: unknown, ok = true) {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      ok ? { ok: true, json: async () => payload } : { ok: false }
+    );
+  }
+
+  it("cria a conta no primeiro acesso e autentica", async () => {
+    mockTokeninfo(tokeninfo());
+    dbMocks.getUserByEmail.mockResolvedValue(null);
+    dbMocks.countAccountsByIp.mockResolvedValue(0);
+    dbMocks.freeAccountsPerIpLimit.mockReturnValue(2);
+    bcryptMocks.hash.mockResolvedValue("hash-google");
+    dbMocks.createLocalUser.mockResolvedValue({
+      id: 30, openId: "local-g", name: "Usuária Google", email: "guser@example.com",
+      phone: null, role: "user", plan: "free",
+    });
+    sdkMocks.createSessionToken.mockResolvedValue("jwt-google");
+    const { ctx, cookies } = publicContext();
+    (ctx.req as { ip?: string }).ip = "203.0.113.9";
+
+    const result = await appRouter.createCaller(ctx).auth.googleLogin({ idToken: "google-id-token" });
+
+    expect(result).toEqual(expect.objectContaining({ email: "guser@example.com", plan: "free" }));
+    expect(dbMocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({
+      email: "guser@example.com",
+      loginMethod: "google",
+    }));
+    expect(cookies).toEqual([{ name: COOKIE_NAME, value: "jwt-google" }]);
+  });
+
+  it("entra direto quando o email já tem conta", async () => {
+    mockTokeninfo(tokeninfo());
+    dbMocks.getUserByEmail.mockResolvedValue({
+      id: 31, openId: "local-31", name: "Existente", email: "guser@example.com",
+      phone: null, role: "user", plan: "start",
+    });
+    sdkMocks.createSessionToken.mockResolvedValue("jwt-existente");
+    const { ctx } = publicContext();
+
+    const result = await appRouter.createCaller(ctx).auth.googleLogin({ idToken: "google-id-token" });
+
+    expect(result).toEqual(expect.objectContaining({ plan: "start" }));
+    expect(dbMocks.createLocalUser).not.toHaveBeenCalled();
+  });
+
+  it("rejeita token de outro público e sem client configurado", async () => {
+    mockTokeninfo(tokeninfo({ aud: "outro-client" }));
+    const { ctx } = publicContext();
+
+    await expect(
+      appRouter.createCaller(ctx).auth.googleLogin({ idToken: "x" })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+
+    delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+    await expect(
+      appRouter.createCaller(ctx).auth.googleLogin({ idToken: "x" })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
   });
 });

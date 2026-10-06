@@ -75,6 +75,9 @@ a.btn { text-decoration: none; }
 
 .link-btn { padding: 0; color: var(--cyan); background: transparent; font-size: .78rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .link-danger { color: #ff9aad; }
+.auth-divider { display: flex; align-items: center; gap: 10px; margin: 19px 0 12px; color: #8895bc; font-size: .72rem; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; border-top: 1px solid rgba(168,181,255,.14); }
+.google-btn-slot { display: flex; justify-content: center; min-height: 40px; }
 .sales-page { position: relative; min-height: 100vh; overflow: hidden; background: radial-gradient(circle at 50% 0%, #1a2154 0%, #0c0e2a 30%, #07091c 70%); }
 .sales-topbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; max-width: 1180px; margin: 0 auto; padding: 26px clamp(20px,4vw,44px); }
 .sales-top-actions { display: flex; gap: 10px; }.sales-top-actions .btn { padding: 10px 18px; border-radius: 11px; font-size: .82rem; font-weight: 800; }

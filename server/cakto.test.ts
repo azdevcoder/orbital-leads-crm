@@ -10,6 +10,7 @@ const dbMocks = vi.hoisted(() => ({
   getCaktoPaymentByToken: vi.fn(),
   getCaktoPaymentByOrderId: vi.fn(),
   confirmCaktoPayment: vi.fn(),
+  getUserByPhoneDigits: vi.fn(),
 }));
 const sdkMocks = vi.hoisted(() => ({ createSessionToken: vi.fn() }));
 const bcryptMocks = vi.hoisted(() => ({ hash: vi.fn() }));

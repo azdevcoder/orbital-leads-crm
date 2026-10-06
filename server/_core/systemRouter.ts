@@ -13,6 +13,10 @@ export const systemRouter = router({
       ok: true,
     })),
 
+  config: publicProcedure.query(() => ({
+    googleClientId: process.env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+  })),
+
   notifyOwner: adminProcedure
     .input(
       z.object({
