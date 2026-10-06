@@ -4,6 +4,7 @@ import { checkSearchQuota, planOf, todayKey, type QuotaUser } from "../shared/pl
 function user(overrides: Partial<QuotaUser> = {}): QuotaUser {
   return {
     plan: "free",
+    planExpiresAt: null,
     quotaDay: null,
     dailySearches: 0,
     dailyLeads: 0,
@@ -88,6 +89,23 @@ describe("cota de buscas", () => {
     expect(planEconomics(PLANS.plus)).toContain("R$ 0,016 por lead");
     expect(planEconomics(PLANS.free)).toBeNull();
     expect(planEconomics(PLANS.scale)).toBeNull();
+  });
+
+  it("plano pago vencido vale como Grátis e avisa a renovação", () => {
+    const past = new Date(Date.now() - 86400000).toISOString();
+    const check = checkSearchQuota(user({ plan: "start", planExpiresAt: past, totalLeads: 0 }));
+    expect(check.expired).toBe(true);
+    expect(check.allowed).toBe(true);
+    expect(check.reason).toMatch(/venceu/);
+    expect(checkSearchQuota(user({ plan: "start", planExpiresAt: past, totalLeads: 10 })).allowed).toBe(false);
+  });
+
+  it("plano pago vigente libera normalmente", () => {
+    const future = new Date(Date.now() + 86400000).toISOString();
+    const check = checkSearchQuota(user({ plan: "start", planExpiresAt: future, dailyLeads: 0 }));
+    expect(check.expired).toBe(false);
+    expect(check.allowed).toBe(true);
+    expect(check.maxResults).toBe(20);
   });
 
   it("Scale: ilimitado com até 50 resultados por busca", () => {

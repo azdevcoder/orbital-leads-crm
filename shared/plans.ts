@@ -98,8 +98,11 @@ export function todayKey(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
+export const PLAN_DURATION_DAYS = 30;
+
 export type QuotaUser = {
   plan: string | null;
+  planExpiresAt: Date | string | null;
   quotaDay: string | null;
   dailySearches: number | null;
   dailyLeads: number | null;
@@ -118,6 +121,9 @@ export type QuotaCheck = {
   leadsLeft: number | null;
   /** leads restantes no total (só planos vitalícios como o Grátis) */
   totalLeadsLeft: number | null;
+  /** true quando o plano pago venceu */
+  expired: boolean;
+  planExpiresAt: Date | string | null;
 };
 
 export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): QuotaCheck {
@@ -126,6 +132,22 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
   const dailySearches = sameDay ? (user.dailySearches ?? 0) : 0;
   const dailyLeads = sameDay ? (user.dailyLeads ?? 0) : 0;
   const totalLeads = user.totalLeads ?? 0;
+
+  // Plano pago vencido volta a valer como Grátis (sem cron: calculado a cada chamada).
+  const expiry = user.planExpiresAt ? new Date(user.planExpiresAt).getTime() : null;
+  if (plan.id !== "free" && expiry !== null && expiry <= now.getTime()) {
+    return {
+      allowed: totalLeads < (PLANS.free.lifetimeLeads ?? 10),
+      reason: `Seu plano ${plan.name} venceu em ${new Date(expiry).toLocaleDateString("pt-BR")}. Renove para continuar capturando sem limites.`,
+      maxResults: PLANS.free.maxPerSearch,
+      plan,
+      expired: true,
+      planExpiresAt: user.planExpiresAt,
+      searchesLeft: null,
+      leadsLeft: null,
+      totalLeadsLeft: Math.max(0, (PLANS.free.lifetimeLeads ?? 10) - totalLeads),
+    };
+  }
 
   if (plan.lifetimeLeads !== null && totalLeads >= plan.lifetimeLeads) {
     return {
@@ -136,6 +158,8 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
       searchesLeft: null,
       leadsLeft: 0,
       totalLeadsLeft: 0,
+      expired: false,
+      planExpiresAt: null,
     };
   }
   if (plan.searchesPerDay !== null && dailySearches >= plan.searchesPerDay) {
@@ -148,6 +172,8 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
       leadsLeft:
         plan.leadsPerDay !== null ? Math.max(0, plan.leadsPerDay - dailyLeads) : null,
       totalLeadsLeft: null,
+      expired: false,
+      planExpiresAt: null,
     };
   }
   if (plan.leadsPerDay !== null && dailyLeads >= plan.leadsPerDay) {
@@ -160,6 +186,8 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
         plan.searchesPerDay !== null ? Math.max(0, plan.searchesPerDay - dailySearches) : null,
       leadsLeft: 0,
       totalLeadsLeft: null,
+      expired: false,
+      planExpiresAt: null,
     };
   }
   return {
@@ -169,6 +197,8 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
     searchesLeft: plan.searchesPerDay !== null ? plan.searchesPerDay - dailySearches : null,
     leadsLeft: plan.leadsPerDay !== null ? plan.leadsPerDay - dailyLeads : null,
     totalLeadsLeft: plan.lifetimeLeads !== null ? Math.max(0, plan.lifetimeLeads - totalLeads) : null,
+    expired: false,
+    planExpiresAt: user.planExpiresAt ?? null,
   };
 }
 

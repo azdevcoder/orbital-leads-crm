@@ -191,13 +191,24 @@ export async function listAllUsers() {
   return db.select().from(users).orderBy(desc(users.createdAt));
 }
 
-export async function setUserPlan(openId: string, plan: PlanId) {
+export async function setUserPlan(openId: string, plan: PlanId, expiresAt?: Date | null) {
   const db = await requireDb();
-  await db
-    .update(users)
-    .set({ plan: planOf(plan).id, updatedAt: new Date() })
-    .where(eq(users.openId, openId));
+  const values: { plan: string; updatedAt: Date; planExpiresAt?: Date | null } = {
+    plan: planOf(plan).id,
+    updatedAt: new Date(),
+  };
+  if (expiresAt !== undefined) values.planExpiresAt = expiresAt;
+  await db.update(users).set(values).where(eq(users.openId, openId));
   return getUserByOpenId(openId);
+}
+
+/** Garante +30 dias de plano (renova a partir do vencimento atual ou de hoje). */
+export async function ensurePlanExpiry(openId: string, plan: PlanId, days = 30) {
+  const user = await getUserByOpenId(openId);
+  if (!user) return user;
+  const current = user.planExpiresAt ? new Date(user.planExpiresAt).getTime() : 0;
+  const base = Math.max(current, Date.now());
+  return setUserPlan(openId, plan, new Date(base + days * 24 * 60 * 60 * 1000));
 }
 
 /** Edição completa pelo admin: perfil + plano + papel. */

@@ -1,0 +1,1 @@
+ALTER TABLE "cakto_payments" ADD COLUMN "planExpiresAt" timestamp;

@@ -33,13 +33,13 @@ function safeUser(user: { id: number; name: string | null; email: string | null;
 
 function safeAdminUser(user: {
   id: number; openId: string; name: string | null; email: string | null; phone: string | null;
-  role: RoleId; plan: string | null; quotaDay: string | null;
+  role: RoleId; plan: string | null; planExpiresAt: Date | string | null; quotaDay: string | null;
   dailySearches: number; dailyLeads: number; totalSearches: number;
   createdAt: Date; lastSignedIn: Date;
 }) {
   return {
     id: user.id, openId: user.openId, name: user.name, email: user.email, phone: user.phone,
-    role: user.role, plan: planOf(user.plan).id,
+    role: user.role, plan: planOf(user.plan).id, planExpiresAt: user.planExpiresAt ?? null,
     quotaDay: user.quotaDay, dailySearches: user.dailySearches, dailyLeads: user.dailyLeads,
     totalSearches: user.totalSearches, createdAt: user.createdAt, lastSignedIn: user.lastSignedIn,
   };
@@ -289,6 +289,8 @@ export const appRouter = router({
           user = await db.getUserByEmail(email);
         }
         if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível ativar o acesso." });
+        // O resgate pode chegar antes do webhook: garante os 30 dias aqui também.
+        await db.ensurePlanExpiry(user.openId, plan);
         await db.markCaktoPaymentClaimed(input.token);
         const token = await sdk.createSessionToken(user.openId, { name: user.name || user.email || "Utilizador" });
         setLocalSession(ctx.res, ctx.req, token);
@@ -366,6 +368,8 @@ export const appRouter = router({
         plan: check.plan,
         allowed: check.allowed,
         reason: check.reason ?? null,
+        expired: check.expired,
+        planExpiresAt: check.planExpiresAt,
         maxResults: check.maxResults,
         searchesLeft: check.searchesLeft,
         leadsLeft: check.leadsLeft,
@@ -530,7 +534,12 @@ export const appRouter = router({
     setPlan: adminProcedure
       .input(z.object({ openId: z.string().min(1), plan: z.enum(PLAN_IDS) }))
       .mutation(async ({ input }) => {
-        const user = await db.setUserPlan(input.openId, input.plan as PlanId);
+        // Plano pago pelo admin vale 30 dias; Grátis limpa o vencimento.
+        const plan = input.plan as PlanId;
+        const user =
+          plan === "free"
+            ? await db.setUserPlan(input.openId, plan, null)
+            : await db.ensurePlanExpiry(input.openId, plan);
         if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Utilizador não encontrado." });
         return safeAdminUser(user);
       }),

@@ -133,7 +133,7 @@ function QuotaBanner({ quota }: { quota: { plan: { id: PlanId; name: string }; a
 
 type AdminUserRow = {
   id: number; openId: string; name: string | null; email: string | null; phone: string | null;
-  role: RoleId; plan: PlanId; quotaDay: string | null;
+  role: RoleId; plan: PlanId; planExpiresAt: string | null; quotaDay: string | null;
   dailySearches: number; dailyLeads: number; totalSearches: number;
   createdAt: Date; lastSignedIn: Date;
 };
@@ -197,7 +197,7 @@ function AdminPanel() {
         <div className="lead-table-wrap">
           {usersQuery.isLoading ? <LoadingLine /> : usersQuery.isError ? <QueryError text="Não foi possível carregar os usuários." onRetry={() => usersQuery.refetch()} /> : (
             <table className="lead-table admin-table">
-              <thead><tr><th>Nome</th><th>Contato</th><th>Plano</th><th>Papel</th><th>Buscas hoje</th><th>Leads hoje</th><th>Total buscas</th><th>Desde</th><th>Acesso</th><th>Gerir</th></tr></thead>
+              <thead><tr><th>Nome</th><th>Contato</th><th>Plano</th><th>Válido até</th><th>Papel</th><th>Buscas hoje</th><th>Leads hoje</th><th>Total buscas</th><th>Desde</th><th>Acesso</th><th>Gerir</th></tr></thead>
               <tbody>
                 {(usersQuery.data as AdminUserRow[] | undefined)?.map(account => (
                   <React.Fragment key={account.openId}>
@@ -209,6 +209,7 @@ function AdminPanel() {
                           {(Object.keys(PLANS) as PlanId[]).map(planId => <option key={planId} value={planId}>{PLANS[planId].name}</option>)}
                         </select>
                       </td>
+                      <td>{account.planExpiresAt ? <small>{formatDate(account.planExpiresAt)}</small> : "—"}</td>
                       <td>
                         <select aria-label={`Papel de ${account.email}`} value={account.role} disabled={updateUser.isPending} onChange={event => updateUser.mutate({ openId: account.openId, role: event.target.value as RoleId })}>
                           {ROLE_IDS.map(roleId => <option key={roleId} value={roleId}>{ROLE_LABELS[roleId]}</option>)}
@@ -233,7 +234,7 @@ function AdminPanel() {
                     </tr>
                     {editing?.openId === account.openId && (
                       <tr key={`${account.openId}-edit`}>
-                        <td colSpan={10}>
+                        <td colSpan={11}>
                           <form className="admin-form" onSubmit={event => { event.preventDefault(); updateUser.mutate({ openId: editing.openId, name: editing.name, email: editing.email, phone: editing.phone }); }}>
                             <label>Nome<input value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} minLength={2} required /></label>
                             <label>Email<input type="email" value={editing.email} onChange={event => setEditing({ ...editing, email: event.target.value })} required /></label>
@@ -784,7 +785,7 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
         )}
 
         {view === "settings" && (
-          <section className="settings-page"><div className="settings-hero"><p className="eyebrow"><Settings size={15} /> IDENTIDADE DO UTILIZADOR</p><h1>Configurações de <em>conta.</em></h1><p>Atualize os seus dados e mantenha as credenciais protegidas.</p></div><div className="settings-grid"><article className="settings-card panel-glass"><div className="panel-heading"><div><p className="eyebrow">PERFIL</p><h3>Dados pessoais</h3></div><UserRound size={20} /></div><form onSubmit={event => { event.preventDefault(); profileMutation.mutate({ name: profileName, email: profileEmail, phone: profilePhone || undefined }); }}><label>Nome<input value={profileName} onChange={e => setProfileName(e.target.value)} minLength={2} required /></label><label>Email<input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} required /></label><label>Telefone<input value={profilePhone} onChange={e => setProfilePhone(e.target.value)} minLength={8} maxLength={32} placeholder="+55 19 99999-0000" /></label><p className="form-hint">Plano atual: <strong>{PLANS[user.plan]?.name ?? user.plan}</strong></p><button className="btn cosmic-primary" disabled={profileMutation.isPending}>{profileMutation.isPending ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />} Guardar perfil</button></form></article><article className="settings-card panel-glass"><div className="panel-heading"><div><p className="eyebrow">SEGURANÇA</p><h3>Alterar palavra-passe</h3></div><KeyRound size={20} /></div><form onSubmit={event => { event.preventDefault(); passwordMutation.mutate({ currentPassword, newPassword }); }}><label>Palavra-passe atual<input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required /></label><label>Nova palavra-passe<input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={8} required /></label><button className="btn cosmic-primary" disabled={passwordMutation.isPending}>{passwordMutation.isPending ? <Loader2 className="spin" size={16} /> : <LockKeyhole size={16} />} Atualizar palavra-passe</button></form></article></div></section>
+          <section className="settings-page"><div className="settings-hero"><p className="eyebrow"><Settings size={15} /> IDENTIDADE DO UTILIZADOR</p><h1>Configurações de <em>conta.</em></h1><p>Atualize os seus dados e mantenha as credenciais protegidas.</p></div><div className="settings-grid"><article className="settings-card panel-glass"><div className="panel-heading"><div><p className="eyebrow">PERFIL</p><h3>Dados pessoais</h3></div><UserRound size={20} /></div><form onSubmit={event => { event.preventDefault(); profileMutation.mutate({ name: profileName, email: profileEmail, phone: profilePhone || undefined }); }}><label>Nome<input value={profileName} onChange={e => setProfileName(e.target.value)} minLength={2} required /></label><label>Email<input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} required /></label><label>Telefone<input value={profilePhone} onChange={e => setProfilePhone(e.target.value)} minLength={8} maxLength={32} placeholder="+55 19 99999-0000" /></label><p className="form-hint">Plano atual: <strong>{PLANS[user.plan]?.name ?? user.plan}</strong>{quotaQuery.data?.planExpiresAt && <span> — válido até {formatDate(quotaQuery.data.planExpiresAt as string)}</span>}{quotaQuery.data?.expired && <span> · <a className="link-btn" href="/planos.html">Renovar agora</a></span>}</p><button className="btn cosmic-primary" disabled={profileMutation.isPending}>{profileMutation.isPending ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />} Guardar perfil</button></form></article><article className="settings-card panel-glass"><div className="panel-heading"><div><p className="eyebrow">SEGURANÇA</p><h3>Alterar palavra-passe</h3></div><KeyRound size={20} /></div><form onSubmit={event => { event.preventDefault(); passwordMutation.mutate({ currentPassword, newPassword }); }}><label>Palavra-passe atual<input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required /></label><label>Nova palavra-passe<input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={8} required /></label><button className="btn cosmic-primary" disabled={passwordMutation.isPending}>{passwordMutation.isPending ? <Loader2 className="spin" size={16} /> : <LockKeyhole size={16} />} Atualizar palavra-passe</button></form></article></div></section>
         )}
 
         {view === "admin" && (

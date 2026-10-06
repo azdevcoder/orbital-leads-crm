@@ -123,13 +123,14 @@ async function handlePaidOrder(data: CaktoOrderData) {
     plan,
     status: "paid",
   });
-  // Idempotência: reaplicar o plano é seguro (mesmo email + plano).
-  await grantPlanAccess({
+  // Idempotência: reaplicar o plano é seguro (mesmo email + plano), com +30 dias.
+  const granted = await grantPlanAccess({
     email,
     name: data.customer?.name,
     phone: data.customer?.phone,
     plan,
   });
+  if (granted) await db.ensurePlanExpiry(granted.openId, plan);
   if (!known) console.log(`[Cakto] acesso liberado: ${email} -> ${plan} (pedido ${data.id})`);
 }
 

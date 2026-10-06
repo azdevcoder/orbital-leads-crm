@@ -36,6 +36,8 @@ export const users = pgTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }).default("email"),
   role: userRoleEnum("role").default("user").notNull(),
   plan: varchar("plan", { length: 16 }).default("free").notNull(),
+  /** Até quando o plano pago vale (30 dias por compra; null = vitalício/grátis). */
+  planExpiresAt: timestamp("planExpiresAt"),
   quotaDay: varchar("quotaDay", { length: 10 }),
   dailySearches: integer("dailySearches").default(0).notNull(),
   dailyLeads: integer("dailyLeads").default(0).notNull(),
