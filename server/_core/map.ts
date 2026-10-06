@@ -214,6 +214,7 @@ export type PlacesNewSearchResponse = {
     nationalPhoneNumber?: string;
     internationalPhoneNumber?: string;
   }>;
+  nextPageToken?: string;
 };
 
 /**
@@ -224,7 +225,8 @@ export type PlacesNewSearchResponse = {
  */
 export async function searchPlacesNew(
   textQuery: string,
-  maxResultCount = 20
+  maxResultCount = 20,
+  pageToken?: string
 ): Promise<PlacesNewSearchResponse> {
   const { apiKey } = getMapsConfig();
 
@@ -236,9 +238,14 @@ export async function searchPlacesNew(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.formattedAddress,places.rating,places.businessStatus,places.websiteUri,places.nationalPhoneNumber,places.internationalPhoneNumber",
+          "places.id,places.displayName,places.formattedAddress,places.rating,places.businessStatus,places.websiteUri,places.nationalPhoneNumber,places.internationalPhoneNumber,nextPageToken",
       },
-      body: JSON.stringify({ textQuery, maxResultCount, languageCode: "pt" }),
+      body: JSON.stringify({
+        textQuery,
+        maxResultCount: Math.min(Math.max(maxResultCount, 1), 20),
+        languageCode: "pt",
+        ...(pageToken ? { pageToken } : {}),
+      }),
     }
   );
 

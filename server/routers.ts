@@ -72,8 +72,19 @@ async function searchAndCapture(input: {
 }) {
   const query = `${input.segment} em ${input.city}, ${input.state}`;
   // Places API (New): o searchText já devolve telefone/website na field mask.
-  const search = await searchPlacesNew(query, input.maxResults);
-  const details = (search.places ?? []).map(place => ({
+  // Pagina (máx. 20 por página) até o limite escolhido, com trava de segurança.
+  const target = Math.min(Math.max(input.maxResults, 1), 50);
+  const collected: NonNullable<Awaited<ReturnType<typeof searchPlacesNew>>["places"]> = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < 5 && collected.length < target; page++) {
+    const search = await searchPlacesNew(query, Math.min(20, target - collected.length), pageToken);
+    const places = search.places ?? [];
+    if (!places.length) break;
+    collected.push(...places.slice(0, target - collected.length));
+    pageToken = search.nextPageToken;
+    if (!pageToken) break;
+  }
+  const details = collected.map(place => ({
     placeId: place.id,
     name: place.displayName?.text || "Sem nome",
     phone: place.internationalPhoneNumber ?? place.nationalPhoneNumber ?? null,
@@ -263,6 +274,7 @@ export const appRouter = router({
           segment: z.string().trim().min(2).max(160),
           city: z.string().trim().min(2).max(160),
           state: z.string().trim().min(2).max(8).transform(value => value.toUpperCase()),
+          limit: z.number().int().min(1).max(50).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -270,8 +282,10 @@ export const appRouter = router({
         if (!quota.allowed) {
           throw new TRPCError({ code: "FORBIDDEN", message: quota.reason });
         }
+        // O usuário escolhe de 1 até o teto do plano.
+        const maxResults = Math.min(input.limit ?? quota.maxResults, quota.maxResults);
         try {
-          const result = await searchAndCapture({ ...input, tenantId: ctx.user.openId, maxResults: quota.maxResults });
+          const result = await searchAndCapture({ ...input, tenantId: ctx.user.openId, maxResults });
           await db.recordSearchUsage(ctx.user.openId, result.saved);
           return result;
         } catch (error) {

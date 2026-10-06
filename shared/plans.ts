@@ -76,8 +76,8 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     tagline: "Prospecção sem teto",
     searchesPerDay: null,
     leadsPerDay: null,
-    maxPerSearch: 20,
-    lifetimeSearches: null,
+    maxPerSearch: 50,
+    lifetimeLeads: null,
     features: [
       "Buscas ilimitadas",
       "Leads ilimitados",

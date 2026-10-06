@@ -90,10 +90,10 @@ describe("cota de buscas", () => {
     expect(planEconomics(PLANS.scale)).toBeNull();
   });
 
-  it("Scale: ilimitado com 20 resultados por busca", () => {
+  it("Scale: ilimitado com até 50 resultados por busca", () => {
     const check = checkSearchQuota(user({ plan: "scale", quotaDay: todayKey(), dailySearches: 500, dailyLeads: 9000 }));
     expect(check.allowed).toBe(true);
-    expect(check.maxResults).toBe(20);
+    expect(check.maxResults).toBe(50);
     expect(check.searchesLeft).toBeNull();
     expect(check.leadsLeft).toBeNull();
   });
