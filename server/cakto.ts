@@ -46,9 +46,9 @@ export function planForOffer(offer: CaktoOrderData["offer"]): PlanId | null {
   if (process.env.CAKTO_OFFER_PLUS) byId[process.env.CAKTO_OFFER_PLUS] = "plus";
   if (process.env.CAKTO_OFFER_SCALE) byId[process.env.CAKTO_OFFER_SCALE] = "scale";
   if (offer?.id && byId[offer.id]) return byId[offer.id];
-  if (offer?.price === 29.9) return "start";
-  if (offer?.price === 49.9) return "plus";
-  if (offer?.price === 99.9) return "scale";
+  if (offer?.price === 29.99) return "start";
+  if (offer?.price === 49.99) return "plus";
+  if (offer?.price === 99.99) return "scale";
   return null;
 }
 

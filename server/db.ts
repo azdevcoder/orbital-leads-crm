@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
@@ -101,6 +101,7 @@ export async function createLocalUser(input: {
   phone: string;
   passwordHash: string;
   plan?: PlanId;
+  signupIp?: string | null;
 }) {
   const db = await requireDb();
   const email = input.email.trim().toLowerCase();
@@ -113,9 +114,25 @@ export async function createLocalUser(input: {
     passwordHash: input.passwordHash,
     loginMethod: "email",
     plan: planOf(input.plan).id,
+    signupIp: input.signupIp?.trim().slice(0, 45) ?? null,
     lastSignedIn: new Date(),
   });
   return getUserByOpenId(openId);
+}
+
+/** Quantas contas (não-admin) já nasceram deste IP — trava anti-abuso do Grátis. */
+export async function countAccountsByIp(ip: string): Promise<number> {
+  const db = await requireDb();
+  const result = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(users)
+    .where(and(eq(users.signupIp, ip), ne(users.role, "admin")));
+  return result[0]?.count ?? 0;
+}
+
+export function freeAccountsPerIpLimit(): number {
+  const raw = Number(process.env.FREE_PER_IP_LIMIT ?? 3);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 3;
 }
 
 /** Regista uma busca concluída nos contadores de cota do tenant. */

@@ -5,6 +5,8 @@ const dbMocks = vi.hoisted(() => ({
   getUserByEmail: vi.fn(),
   createLocalUser: vi.fn(),
   upsertUser: vi.fn(),
+  countAccountsByIp: vi.fn(),
+  freeAccountsPerIpLimit: vi.fn(),
 }));
 const bcryptMocks = vi.hoisted(() => ({ compare: vi.fn(), hash: vi.fn() }));
 const sdkMocks = vi.hoisted(() => ({ createSessionToken: vi.fn() }));
@@ -67,5 +69,35 @@ describe("auth local", () => {
       appRouter.createCaller(ctx).auth.login({ email: "teste@empresa.pt", password: "errada" })
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     expect(cookies).toEqual([]);
+  });
+
+  it("regista com IP e bloqueia a 4ª conta gratuita do mesmo IP", async () => {
+    dbMocks.getUserByEmail.mockResolvedValue(null);
+    dbMocks.countAccountsByIp.mockResolvedValue(2);
+    dbMocks.freeAccountsPerIpLimit.mockReturnValue(3);
+    bcryptMocks.hash.mockResolvedValue("hash-nova");
+    dbMocks.createLocalUser.mockResolvedValue({
+      id: 10, openId: "local-10", name: "Nova Conta", email: "nova@empresa.pt",
+      phone: "+55 19 99999-0000", role: "user", plan: "free",
+    });
+    sdkMocks.createSessionToken.mockResolvedValue("jwt-nova");
+    const { ctx } = publicContext();
+    (ctx.req as { ip?: string }).ip = "203.0.113.9";
+
+    const result = await appRouter.createCaller(ctx).auth.register({
+      name: "Nova Conta", email: "nova@empresa.pt", phone: "+55 19 99999-0000", password: "senha1234",
+    });
+
+    expect(result).toEqual(expect.objectContaining({ email: "nova@empresa.pt", plan: "free" }));
+    expect(dbMocks.countAccountsByIp).toHaveBeenCalledWith("203.0.113.9");
+    expect(dbMocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ signupIp: "203.0.113.9" }));
+
+    dbMocks.countAccountsByIp.mockResolvedValue(3);
+    await expect(
+      appRouter.createCaller(ctx).auth.register({
+        name: "Outra", email: "outra@empresa.pt", phone: "+55 19 99999-0001", password: "senha1234",
+      })
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    expect(dbMocks.createLocalUser).toHaveBeenCalledTimes(1);
   });
 });

@@ -21,9 +21,9 @@ describe("catálogo de planos", () => {
 
   it("expõe os quatro planos com preços esperados", async () => {
     const { PLANS } = await import("../shared/plans");
-    expect(PLANS.start.price).toBe(29.9);
-    expect(PLANS.plus.price).toBe(49.9);
-    expect(PLANS.scale.price).toBe(99.9);
+    expect(PLANS.start.price).toBe(29.99);
+    expect(PLANS.plus.price).toBe(49.99);
+    expect(PLANS.scale.price).toBe(99.99);
     expect(PLANS.start.searchesPerDay).toBeNull();
     expect(PLANS.start.leadsPerDay).toBe(50);
   });

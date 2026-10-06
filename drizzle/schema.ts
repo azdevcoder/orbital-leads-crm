@@ -31,6 +31,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 320 }).unique(),
   phone: varchar("phone", { length: 32 }),
   passwordHash: varchar("passwordHash", { length: 255 }),
+  signupIp: varchar("signupIp", { length: 45 }),
   loginMethod: varchar("loginMethod", { length: 64 }).default("email"),
   role: userRoleEnum("role").default("user").notNull(),
   plan: varchar("plan", { length: 16 }).default("free").notNull(),

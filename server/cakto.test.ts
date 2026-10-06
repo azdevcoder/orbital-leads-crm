@@ -68,7 +68,7 @@ describe("webhook Cakto", () => {
 
   it("mapeia oferta ao plano por id e por preço", () => {
     expect(planForOffer({ id: "offer-plus-1", price: 0 })?.valueOf()).toBe("plus");
-    expect(planForOffer({ id: "desconhecida", price: 99.9 })).toBe("scale");
+    expect(planForOffer({ id: "desconhecida", price: 99.99 })).toBe("scale");
     expect(planForOffer({ id: "desconhecida", price: 1 })).toBeNull();
     expect(planForOffer(null)).toBeNull();
   });

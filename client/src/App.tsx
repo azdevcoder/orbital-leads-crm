@@ -88,7 +88,7 @@ function QuotaBanner({ quota }: { quota: { plan: { name: string }; allowed: bool
     <div className={`quota-banner panel-glass${quota.allowed ? "" : " quota-exhausted"}`} role="status">
       <span className="plan-chip">{quota.plan.name}</span>
       <span>{quota.allowed ? parts.join(" · ") : quota.reason}</span>
-      {!quota.allowed && <a className="btn cosmic-primary quota-cta" href="/#planos"><Rocket size={15} /> Ver planos e aumentar meu limite</a>}
+      {!quota.allowed && <a className="btn cosmic-primary quota-cta" href="/planos.html#planos"><Rocket size={15} /> Ver planos e aumentar meu limite</a>}
     </div>
   );
 }
@@ -704,15 +704,16 @@ function App() {
   const activateToken = searchParams.get("ativar");
   const loginInitial = searchParams.get("modo") === "registro" ? "register" : "login";
   const isPanelPath = pathname === "/painel.html" || pathname === "/painel";
+  const isPlansPath = pathname === "/planos.html" || pathname === "/planos";
 
   useEffect(() => {
     if (meQuery.isLoading || previewView) return;
     if (meQuery.data) {
-      if (!isPanelPath && !activateToken) window.location.replace("/painel.html");
+      if (!isPanelPath && !isPlansPath && !activateToken) window.location.replace("/painel.html");
     } else if (isPanelPath && !activateToken) {
       window.location.replace("/login.html");
     }
-  }, [meQuery.isLoading, meQuery.data, previewView, isPanelPath, activateToken]);
+  }, [meQuery.isLoading, meQuery.data, previewView, isPanelPath, isPlansPath, activateToken]);
 
   if (meQuery.isLoading) return <div className="initial-loader"><Rocket size={28} /><span>Preparar centro de comando...</span></div>;
   const previewUser: CurrentUser = { id: 0, name: "Pré-visualização", email: "preview@local.dev", phone: null, role: "user", plan: "scale" };
@@ -722,7 +723,7 @@ function App() {
   };
   return (
     <><Toaster richColors position="top-right" theme="dark" />{meQuery.data ? (
-      isPanelPath || previewView ? <AppShell user={meQuery.data} onLogout={() => logout.mutate(undefined, { onSettled: () => { window.location.href = "/"; } })} /> : <div className="initial-loader"><Rocket size={28} /><span>A abrir o painel...</span></div>
+      isPanelPath || previewView ? <AppShell user={meQuery.data} onLogout={() => logout.mutate(undefined, { onSettled: () => { window.location.href = "/"; } })} /> : isPlansPath ? <SalesPage /> : <div className="initial-loader"><Rocket size={28} /><span>A abrir o painel...</span></div>
     ) : previewView ? (
       <AppShell user={previewUser} initialView={previewView} onLogout={() => { window.location.href = "/"; }} />
     ) : activateToken ? (

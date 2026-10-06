@@ -42,7 +42,7 @@ export const PLANS: Record<PlanId, PlanInfo> = {
   start: {
     id: "start",
     name: "Start",
-    price: 29.9,
+    price: 29.99,
     tagline: "Para quem prospecta todo dia",
     searchesPerDay: null,
     leadsPerDay: 50,
@@ -57,7 +57,7 @@ export const PLANS: Record<PlanId, PlanInfo> = {
   plus: {
     id: "plus",
     name: "Plus",
-    price: 49.9,
+    price: 49.99,
     tagline: "Para operações em escala",
     searchesPerDay: null,
     leadsPerDay: 100,
@@ -74,7 +74,7 @@ export const PLANS: Record<PlanId, PlanInfo> = {
   scale: {
     id: "scale",
     name: "Scale",
-    price: 99.9,
+    price: 99.99,
     tagline: "Prospecção sem teto",
     searchesPerDay: null,
     leadsPerDay: null,

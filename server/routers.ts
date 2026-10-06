@@ -140,8 +140,22 @@ export const appRouter = router({
         if (existing) {
           throw new TRPCError({ code: "CONFLICT", message: "Já existe uma conta com este email." });
         }
+        // Anti-abuso: limite de contas gratuitas por IP (família/escritório ok, fazendas não).
+        const signupIp =
+          (typeof ctx.req.ip === "string" && ctx.req.ip) ||
+          ctx.req.socket?.remoteAddress ||
+          null;
+        if (signupIp) {
+          const used = await db.countAccountsByIp(signupIp);
+          if (used >= db.freeAccountsPerIpLimit()) {
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: "Limite de contas gratuitas atingido nesta conexão. Fale com o time Orbital para liberar mais acessos.",
+            });
+          }
+        }
         const passwordHash = await bcrypt.hash(input.password, 12);
-        const user = await db.createLocalUser({ name: input.name, email: input.email, phone: input.phone, passwordHash });
+        const user = await db.createLocalUser({ name: input.name, email: input.email, phone: input.phone, passwordHash, signupIp });
         if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível criar a conta." });
         const token = await sdk.createSessionToken(user.openId, { name: user.name || input.name });
         setLocalSession(ctx.res, ctx.req, token);
