@@ -53,6 +53,7 @@ export const leads = pgTable(
     placeId: varchar("placeId", { length: 255 }),
     name: varchar("name", { length: 255 }).notNull(),
     phone: varchar("phone", { length: 64 }),
+    email: varchar("email", { length: 320 }),
     fullAddress: text("fullAddress"),
     website: varchar("website", { length: 512 }),
     rating: numeric("rating", { precision: 3, scale: 1 }),

@@ -43,6 +43,13 @@
       "when": 1791287189348,
       "tag": "0005_even_captain_universe",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791289200321,
+      "tag": "0006_short_odin",
+      "breakpoints": true
     }
   ]
 }

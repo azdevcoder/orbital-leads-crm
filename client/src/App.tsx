@@ -3,11 +3,15 @@ import { trpc } from "@/lib/trpc";
 import { PLANS, formatPrice, planEconomics, planHasCrm, planHasExport, planHasWhatsapp, type PlanId } from "@shared/plans";
 import { ROLE_IDS, ROLE_LABELS, roleLabel, type RoleId } from "@shared/roles";
 import {
+  ArrowDown,
+  ArrowUp,
   ArrowUpRight,
   BarChart3,
   Check,
   CheckCircle2,
+  ChevronsUpDown,
   Columns3,
+  Copy,
   Download,
   FileSpreadsheet,
   Globe2,
@@ -20,6 +24,8 @@ import {
   MapPin,
   Menu,
   MessageCircle,
+  Mail,
+  Pencil,
   Phone,
   Plus,
   Rocket,
@@ -78,6 +84,33 @@ export function NoteComposer({ value, pending, onChange, onAdd }: { value: strin
 
 export function applyKanbanMove(input: { leadId: number; fromStatus?: string; nextStatus?: PipelineStatus; onMove: (leadId: number, status: PipelineStatus) => void }) {
   if (input.leadId && input.nextStatus && input.nextStatus !== input.fromStatus) input.onMove(input.leadId, input.nextStatus);
+}
+
+type LeadSort = "name" | "segment" | "location" | "rating" | "status";
+
+async function copyText(value: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copiado.`);
+  } catch {
+    try {
+      const area = document.createElement("textarea");
+      area.value = value;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+      toast.success(`${label} copiado.`);
+    } catch {
+      toast.error("Não foi possível copiar.");
+    }
+  }
+}
+
+export function SortHeader({ label, column, sortBy, sortDir, onSort }: { label: string; column: LeadSort; sortBy: LeadSort | ""; sortDir: "asc" | "desc"; onSort: (column: LeadSort) => void }) {
+  const active = sortBy === column;
+  const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
+  return <button className={`th-sort${active ? " active" : ""}`} onClick={() => onSort(column)} aria-label={`Ordenar por ${label}`}><span>{label}</span><Icon size={13} /></button>;
 }
 
 function QuotaBanner({ quota }: { quota: { plan: { id: PlanId; name: string }; allowed: boolean; reason: string | null; searchesLeft: number | null; leadsLeft: number | null; totalLeadsLeft: number | null } }) {
@@ -473,6 +506,11 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
   const [cityFilter, setCityFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [crmTab, setCrmTab] = useState<"lista" | "kanban">("lista");
+  const [sortBy, setSortBy] = useState<LeadSort | "">("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [onlyWithPhone, setOnlyWithPhone] = useState(true);
+  const [leadEmailDraft, setLeadEmailDraft] = useState("");
+  const [editingLeadEmail, setEditingLeadEmail] = useState(false);
   const [activeLeadId, setActiveLeadId] = useState<number | null>(null);
   const [newNote, setNewNote] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
@@ -494,7 +532,10 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
     segment: segmentFilter || undefined,
     city: cityFilter || undefined,
     query: quickSearch || undefined,
-  }), [statusFilter, segmentFilter, cityFilter, quickSearch]);
+    hasPhone: onlyWithPhone || undefined,
+    sortBy: sortBy || undefined,
+    sortDir,
+  }), [statusFilter, segmentFilter, cityFilter, quickSearch, onlyWithPhone, sortBy, sortDir]);
   const leadsQuery = trpc.leads.list.useQuery(filters);
   const metricsQuery = trpc.leads.metrics.useQuery();
   const historyQuery = trpc.places.history.useQuery();
@@ -618,6 +659,34 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
     setSelectedIds(current => current.includes(leadId) ? current.filter(id => id !== leadId) : [...current, leadId]);
   }
 
+  function handleSort(column: LeadSort) {
+    if (sortBy === column) {
+      setSortDir(current => current === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortDir(column === "rating" ? "desc" : "asc");
+    }
+  }
+
+  const visibleLeads = leadsQuery.data ?? [];
+  const allVisibleSelected = visibleLeads.length > 0 && visibleLeads.every(lead => selectedIds.includes(lead.id));
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) setSelectedIds([]);
+    else setSelectedIds(visibleLeads.map(lead => lead.id));
+  }
+
+  const detailsMutation = trpc.leads.updateDetails.useMutation({    onSuccess: async () => {
+      setEditingLeadEmail(false);
+      await utils.leads.details.invalidate();
+      await utils.leads.list.invalidate();
+      toast.success("Email do lead atualizado.");
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  useEffect(() => { setEditingLeadEmail(false); setLeadEmailDraft(""); }, [activeLeadId]);
+
   return (
     <main className="app-shell">
       <div className="cosmic-backdrop" aria-hidden="true"><span className="nebula nebula-one" /><span className="nebula nebula-two" /><span className="lens-flare" /></div>
@@ -662,9 +731,9 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
         {view === "crm" && (
           <section className="crm-page">
             <div className="crm-head"><div><p className="eyebrow">OPERAÇÕES COMERCIAIS</p><h1>Meu <em>CRM.</em></h1></div>{planHasExport(user.plan) && <ExportActions pending={exportMutation.isPending} onExport={handleExport} />}</div>
-            <article className="filter-bar panel-glass"><div className="input-icon"><SearchIcon size={16} /><input value={quickSearch} onChange={e => setQuickSearch(e.target.value)} placeholder="Busca rápida por nome, telefone, endereço ou website" /></div><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as PipelineStatus | "")}><option value="">Todos os status</option>{PIPELINE_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}</select><input value={segmentFilter} onChange={e => setSegmentFilter(e.target.value)} placeholder="Segmento" /><input value={cityFilter} onChange={e => setCityFilter(e.target.value)} placeholder="Cidade" /><button className="clear-filters" onClick={() => { setQuickSearch(""); setStatusFilter(""); setSegmentFilter(""); setCityFilter(""); }}>Limpar</button></article>
+            <article className="filter-bar panel-glass"><div className="input-icon"><SearchIcon size={16} /><input value={quickSearch} onChange={e => setQuickSearch(e.target.value)} placeholder="Busca rápida por nome, telefone, endereço ou website" /></div><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as PipelineStatus | "")}><option value="">Todos os status</option>{PIPELINE_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}</select><input value={segmentFilter} onChange={e => setSegmentFilter(e.target.value)} placeholder="Segmento" /><input value={cityFilter} onChange={e => setCityFilter(e.target.value)} placeholder="Cidade" /><label className="check-inline"><input type="checkbox" checked={onlyWithPhone} onChange={e => setOnlyWithPhone(e.target.checked)} /> Só com telefone</label><button className="clear-filters" onClick={() => { setQuickSearch(""); setStatusFilter(""); setSegmentFilter(""); setCityFilter(""); setOnlyWithPhone(true); setSortBy(""); setSortDir("asc"); }}>Limpar</button></article>
             <div className="crm-tabs" role="tablist" aria-label="Modo de visualização do CRM"><button className={crmTab === "lista" ? "active" : ""} onClick={() => setCrmTab("lista")}><Users size={15} /> Lista Leads</button><button className={crmTab === "kanban" ? "active" : ""} onClick={() => setCrmTab("kanban")}><Columns3 size={15} /> Kanban</button></div>
-            <div className="crm-sections">{crmTab === "lista" ? <article className="table-panel panel-glass"><div className="panel-heading"><div><p className="eyebrow">LISTA</p><h3>Leads capturados <span>{leadsQuery.data?.length ?? 0}</span></h3></div><span className="selection-text">{selectedIds.length ? `${selectedIds.length} selecionado${selectedIds.length > 1 ? "s" : ""}` : "Selecione para exportar"}</span></div><div className="lead-table-wrap"><table className="lead-table"><thead><tr><th /><th>Nome</th><th>Segmento</th><th>Localização</th><th>Avaliação</th><th>Status</th><th /></tr></thead><tbody>{leadsQuery.isLoading ? <tr><td colSpan={7}><LoadingLine /></td></tr> : leadsQuery.isError ? <tr><td colSpan={7}><QueryError text="Não foi possível carregar os leads." onRetry={() => leadsQuery.refetch()} /></td></tr> : leadsQuery.data?.length ? leadsQuery.data.map(lead => <tr key={lead.id}><td><input aria-label={`Selecionar ${lead.name}`} type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleSelection(lead.id)} /></td><td><button className="lead-name" onClick={() => setActiveLeadId(lead.id)}>{lead.name}<small>{lead.phone ?? "Sem telefone"}</small></button></td><td><span className="segment-chip">{lead.segment}</span></td><td>{lead.city}, {lead.state}</td><td>{lead.rating ? <span className="rating"><Star size={14} fill="currentColor" /> {lead.rating}</span> : "—"}</td><td><span className={`status-pill ${statusClass(lead.status)}`}>{lead.status}</span></td><td><button className="icon-action" onClick={() => setActiveLeadId(lead.id)} title="Abrir detalhes"><ArrowUpRight size={16} /></button></td></tr>) : <tr><td colSpan={7}><EmptyState icon={<Users size={27} />} text="Ainda não há leads para estes filtros." /></td></tr>}</tbody></table></div></article> : planHasCrm(user.plan) ? <article className="kanban-wrap"><div className="panel-heading"><div><p className="eyebrow">PIPELINE DE VENDAS</p><h3>Arraste para mover cada oportunidade</h3></div><Columns3 size={20} /></div>{leadsQuery.isError ? <QueryError text="O pipeline não está disponível neste momento." onRetry={() => leadsQuery.refetch()} /> : <div className="kanban-board">{PIPELINE_STATUSES.map(status => <section className="kanban-column" key={status}><header><span className={`status-dot ${statusClass(status)}`} /><strong>{status}</strong><span>{leadGroups[status]?.length ?? 0}</span></header><div className="kanban-dropzone" data-status={status} ref={element => { columnsRef.current[status] = element; }}>{leadGroups[status]?.map(lead => <article className="lead-card" data-lead-id={lead.id} key={lead.id} onClick={() => setActiveLeadId(lead.id)}><div className="lead-card-top"><span className="grab-hint">···</span><span className="rating">{lead.rating ? <><Star size={12} fill="currentColor" /> {lead.rating}</> : "Novo"}</span></div><h4>{lead.name}</h4><p><MapPin size={13} /> {lead.city}, {lead.state}</p><div className="lead-card-footer"><span>{lead.segment}</span>{planHasWhatsapp(user.plan) && whatsappLink(lead.phone) ? <a href={whatsappLink(lead.phone)!} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} title="Abrir WhatsApp"><MessageCircle size={16} /></a> : <span className="no-phone"><Phone size={14} /></span>}</div></article>)}</div></section>)}</div>}</article> : <article className="kanban-wrap"><div className="upgrade-note panel-glass"><p className="eyebrow">PIPELINE BLOQUEADO</p><p>O Kanban com arrastar e soltar está disponível a partir do plano Plus. Fale com o time Orbital para ativar.</p></div></article>}
+            <div className="crm-sections">{crmTab === "lista" ? <article className="table-panel panel-glass"><div className="panel-heading"><div><p className="eyebrow">LISTA</p><h3>Leads capturados <span>{leadsQuery.data?.length ?? 0}</span></h3></div><span className="selection-text">{selectedIds.length ? `${selectedIds.length} selecionado${selectedIds.length > 1 ? "s" : ""}` : "Selecione para exportar"}</span></div><div className="lead-table-wrap"><table className="lead-table"><thead><tr><th><input aria-label="Selecionar todos" type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} /></th><th><SortHeader label="Nome" column="name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} /></th><th>Email</th><th><SortHeader label="Segmento" column="segment" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} /></th><th><SortHeader label="Localização" column="location" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} /></th><th><SortHeader label="Avaliação" column="rating" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} /></th><th><SortHeader label="Status" column="status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} /></th><th /></tr></thead><tbody>{leadsQuery.isLoading ? <tr><td colSpan={8}><LoadingLine /></td></tr> : leadsQuery.isError ? <tr><td colSpan={8}><QueryError text="Não foi possível carregar os leads." onRetry={() => leadsQuery.refetch()} /></td></tr> : leadsQuery.data?.length ? leadsQuery.data.map(lead => <tr key={lead.id}><td><input aria-label={`Selecionar ${lead.name}`} type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleSelection(lead.id)} /></td><td><button className="lead-name" onClick={() => setActiveLeadId(lead.id)}>{lead.name}<small>{lead.phone ?? "Sem telefone"}</small></button></td><td>{lead.email ? <span className="contact-copy"><span>{lead.email}</span><button className="icon-action mini" onClick={event => { event.stopPropagation(); copyText(lead.email!, "Email"); }} title="Copiar email" aria-label={`Copiar email de ${lead.name}`}><Copy size={13} /></button></span> : "—"}</td><td><span className="segment-chip">{lead.segment}</span></td><td>{lead.city}, {lead.state}</td><td>{lead.rating ? <span className="rating"><Star size={14} fill="currentColor" /> {lead.rating}</span> : "—"}</td><td><span className={`status-pill ${statusClass(lead.status)}`}>{lead.status}</span></td><td><button className="icon-action" onClick={() => setActiveLeadId(lead.id)} title="Abrir detalhes"><ArrowUpRight size={16} /></button></td></tr>) : <tr><td colSpan={8}><EmptyState icon={<Users size={27} />} text="Ainda não há leads para estes filtros." /></td></tr>}</tbody></table></div></article> : planHasCrm(user.plan) ? <article className="kanban-wrap"><div className="panel-heading"><div><p className="eyebrow">PIPELINE DE VENDAS</p><h3>Arraste para mover cada oportunidade</h3></div><Columns3 size={20} /></div>{leadsQuery.isError ? <QueryError text="O pipeline não está disponível neste momento." onRetry={() => leadsQuery.refetch()} /> : <div className="kanban-board">{PIPELINE_STATUSES.map(status => <section className="kanban-column" key={status}><header><span className={`status-dot ${statusClass(status)}`} /><strong>{status}</strong><span>{leadGroups[status]?.length ?? 0}</span></header><div className="kanban-dropzone" data-status={status} ref={element => { columnsRef.current[status] = element; }}>{leadGroups[status]?.map(lead => <article className="lead-card" data-lead-id={lead.id} key={lead.id} onClick={() => setActiveLeadId(lead.id)}><div className="lead-card-top"><span className="grab-hint">···</span><span className="rating">{lead.rating ? <><Star size={12} fill="currentColor" /> {lead.rating}</> : "Novo"}</span></div><h4>{lead.name}</h4><p><MapPin size={13} /> {lead.city}, {lead.state}</p><div className="lead-card-footer"><span>{lead.segment}</span>{planHasWhatsapp(user.plan) && whatsappLink(lead.phone) ? <a href={whatsappLink(lead.phone)!} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} title="Abrir WhatsApp"><MessageCircle size={16} /></a> : <span className="no-phone"><Phone size={14} /></span>}</div></article>)}</div></section>)}</div>}</article> : <article className="kanban-wrap"><div className="upgrade-note panel-glass"><p className="eyebrow">PIPELINE BLOQUEADO</p><p>O Kanban com arrastar e soltar está disponível a partir do plano Plus. Fale com o time Orbital para ativar.</p></div></article>}
             </div>
           </section>
         )}
@@ -678,7 +747,7 @@ export function AppShell({ user, onLogout, initialView = "dashboard" }: { user: 
         )}
       </section>
 
-      {activeLeadId !== null && <div className="modal-backdrop" role="presentation" onMouseDown={() => setActiveLeadId(null)}><section className="lead-modal panel-glass" role="dialog" aria-modal="true" aria-label="Detalhes do lead" onMouseDown={event => event.stopPropagation()}><button className="modal-close" onClick={() => setActiveLeadId(null)} aria-label="Fechar detalhes"><X size={19} /></button>{detailQuery.isLoading ? <LoadingLine /> : detailQuery.isError ? <QueryError text="Não foi possível carregar os detalhes deste lead." onRetry={() => detailQuery.refetch()} /> : detailQuery.data ? <><div className="modal-lead-head"><div><p className="eyebrow">FICHA DO LEAD</p><h2>{detailQuery.data.lead.name}</h2><p><MapPin size={14} /> {detailQuery.data.lead.fullAddress ?? `${detailQuery.data.lead.city}, ${detailQuery.data.lead.state}`}</p></div>{planHasCrm(user.plan) ? <LeadStatusSelect status={detailQuery.data.lead.status} onStatusChange={status => statusMutation.mutate({ leadId: activeLeadId, status })} /> : <span className={`status-pill ${statusClass(detailQuery.data.lead.status)}`}>{detailQuery.data.lead.status}</span>}</div><div className="contact-links"><span><Phone size={16} /> {detailQuery.data.lead.phone ?? "Telefone indisponível"}</span>{detailQuery.data.lead.website && <a href={detailQuery.data.lead.website} target="_blank" rel="noreferrer"><Globe2 size={16} /> Website</a>}{planHasWhatsapp(user.plan) && whatsappLink(detailQuery.data.lead.phone) && <a className="whatsapp-link" href={whatsappLink(detailQuery.data.lead.phone)!} target="_blank" rel="noreferrer"><MessageCircle size={16} /> WhatsApp</a>}</div><div className="modal-grid"><div><h4>Notas internas</h4><NoteComposer value={newNote} pending={noteMutation.isPending} onChange={setNewNote} onAdd={() => noteMutation.mutate({ leadId: activeLeadId, content: newNote })} /><div className="note-list">{detailQuery.data.notes.length ? detailQuery.data.notes.map(note => <article key={note.id}>{editingNoteId === note.id ? <form className="note-form" onSubmit={event => { event.preventDefault(); if (editingNoteContent.trim()) updateNoteMutation.mutate({ noteId: note.id, content: editingNoteContent }); }}><textarea value={editingNoteContent} onChange={e => setEditingNoteContent(e.target.value)} aria-label="Editar nota" /><div><button className="btn subtle-btn" disabled={updateNoteMutation.isPending}>Guardar</button><button type="button" className="note-cancel" onClick={() => { setEditingNoteId(null); setEditingNoteContent(""); }}>Cancelar</button></div></form> : <><p>{note.content}</p><div className="note-meta"><small>{formatDate(note.updatedAt)}</small><button className="note-edit" onClick={() => { setEditingNoteId(note.id); setEditingNoteContent(note.content); }}>Editar</button></div></>}</article>) : <p className="empty-copy">Ainda não existem notas internas.</p>}</div></div><div><h4>Histórico de contactos</h4><form className="contact-form" onSubmit={event => { event.preventDefault(); contactMutation.mutate({ leadId: activeLeadId, channel: contactChannel, details: contactDetails || undefined }); }}><select value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>WhatsApp</option><option>Telefone</option><option>Email</option><option>Reunião</option><option>Outro</option></select><input value={contactDetails} onChange={e => setContactDetails(e.target.value)} placeholder="Detalhe opcional" /><button className="btn subtle-btn" disabled={contactMutation.isPending}><Plus size={15} /> Registar contacto</button></form><div className="contact-log">{detailQuery.data.contacts.length ? detailQuery.data.contacts.map(contact => <article key={contact.id}><span className="contact-icon"><MessageCircle size={14} /></span><div><strong>{contact.channel}</strong><p>{contact.details || "Contacto registado"}</p><small>{formatDate(contact.contactedAt)}</small></div></article>) : <p className="empty-copy">Nenhum contacto registado.</p>}</div></div></div></> : <EmptyState icon={<Users size={28} />} text="Lead não encontrado." />}</section></div>}
+      {activeLeadId !== null && <div className="modal-backdrop" role="presentation" onMouseDown={() => setActiveLeadId(null)}><section className="lead-modal panel-glass" role="dialog" aria-modal="true" aria-label="Detalhes do lead" onMouseDown={event => event.stopPropagation()}><button className="modal-close" onClick={() => setActiveLeadId(null)} aria-label="Fechar detalhes"><X size={19} /></button>{detailQuery.isLoading ? <LoadingLine /> : detailQuery.isError ? <QueryError text="Não foi possível carregar os detalhes deste lead." onRetry={() => detailQuery.refetch()} /> : detailQuery.data ? <><div className="modal-lead-head"><div><p className="eyebrow">FICHA DO LEAD</p><h2>{detailQuery.data.lead.name}</h2><p><MapPin size={14} /> {detailQuery.data.lead.fullAddress ?? `${detailQuery.data.lead.city}, ${detailQuery.data.lead.state}`}</p></div>{planHasCrm(user.plan) ? <LeadStatusSelect status={detailQuery.data.lead.status} onStatusChange={status => statusMutation.mutate({ leadId: activeLeadId, status })} /> : <span className={`status-pill ${statusClass(detailQuery.data.lead.status)}`}>{detailQuery.data.lead.status}</span>}</div><div className="contact-links"><span><Phone size={16} /> {detailQuery.data.lead.phone ?? "Telefone indisponível"}{detailQuery.data.lead.phone && <button className="icon-action mini" onClick={() => copyText(detailQuery.data.lead.phone!, "Telefone")} title="Copiar telefone" aria-label="Copiar telefone"><Copy size={13} /></button>}</span>{editingLeadEmail ? <form className="email-edit" onSubmit={event => { event.preventDefault(); detailsMutation.mutate({ leadId: activeLeadId, email: leadEmailDraft || null }); }}><input type="email" value={leadEmailDraft} onChange={event => setLeadEmailDraft(event.target.value)} placeholder="email@empresa.com" required /><button className="btn subtle-btn" disabled={detailsMutation.isPending}>Guardar</button><button type="button" className="link-btn" onClick={() => setEditingLeadEmail(false)}>Cancelar</button></form> : detailQuery.data.lead.email ? <span><Mail size={16} /> {detailQuery.data.lead.email}<button className="icon-action mini" onClick={() => copyText(detailQuery.data.lead.email!, "Email")} title="Copiar email" aria-label="Copiar email"><Copy size={13} /></button><button className="icon-action mini" onClick={() => { setLeadEmailDraft(detailQuery.data.lead.email ?? ""); setEditingLeadEmail(true); }} title="Editar email" aria-label="Editar email"><Pencil size={13} /></button></span> : <button className="link-btn" onClick={() => { setLeadEmailDraft(""); setEditingLeadEmail(true); }}>+ Adicionar email</button>}{detailQuery.data.lead.website && <a href={detailQuery.data.lead.website} target="_blank" rel="noreferrer"><Globe2 size={16} /> Website</a>}{planHasWhatsapp(user.plan) && whatsappLink(detailQuery.data.lead.phone) && <a className="whatsapp-link" href={whatsappLink(detailQuery.data.lead.phone)!} target="_blank" rel="noreferrer"><MessageCircle size={16} /> WhatsApp</a>}</div><div className="modal-grid"><div><h4>Notas internas</h4><NoteComposer value={newNote} pending={noteMutation.isPending} onChange={setNewNote} onAdd={() => noteMutation.mutate({ leadId: activeLeadId, content: newNote })} /><div className="note-list">{detailQuery.data.notes.length ? detailQuery.data.notes.map(note => <article key={note.id}>{editingNoteId === note.id ? <form className="note-form" onSubmit={event => { event.preventDefault(); if (editingNoteContent.trim()) updateNoteMutation.mutate({ noteId: note.id, content: editingNoteContent }); }}><textarea value={editingNoteContent} onChange={e => setEditingNoteContent(e.target.value)} aria-label="Editar nota" /><div><button className="btn subtle-btn" disabled={updateNoteMutation.isPending}>Guardar</button><button type="button" className="note-cancel" onClick={() => { setEditingNoteId(null); setEditingNoteContent(""); }}>Cancelar</button></div></form> : <><p>{note.content}</p><div className="note-meta"><small>{formatDate(note.updatedAt)}</small><button className="note-edit" onClick={() => { setEditingNoteId(note.id); setEditingNoteContent(note.content); }}>Editar</button></div></>}</article>) : <p className="empty-copy">Ainda não existem notas internas.</p>}</div></div><div><h4>Histórico de contactos</h4><form className="contact-form" onSubmit={event => { event.preventDefault(); contactMutation.mutate({ leadId: activeLeadId, channel: contactChannel, details: contactDetails || undefined }); }}><select value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>WhatsApp</option><option>Telefone</option><option>Email</option><option>Reunião</option><option>Outro</option></select><input value={contactDetails} onChange={e => setContactDetails(e.target.value)} placeholder="Detalhe opcional" /><button className="btn subtle-btn" disabled={contactMutation.isPending}><Plus size={15} /> Registar contacto</button></form><div className="contact-log">{detailQuery.data.contacts.length ? detailQuery.data.contacts.map(contact => <article key={contact.id}><span className="contact-icon"><MessageCircle size={14} /></span><div><strong>{contact.channel}</strong><p>{contact.details || "Contacto registado"}</p><small>{formatDate(contact.contactedAt)}</small></div></article>) : <p className="empty-copy">Nenhum contacto registado.</p>}</div></div></div></> : <EmptyState icon={<Users size={28} />} text="Lead não encontrado." />}</section></div>}
     </main>
   );
 }

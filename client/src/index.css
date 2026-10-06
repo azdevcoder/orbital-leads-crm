@@ -113,3 +113,13 @@ a.btn { text-decoration: none; }
 @media (max-width: 820px) { .admin-form { grid-template-columns: 1fr; } }
 @media (max-width: 530px) { .sales-features, .plans-grid { grid-template-columns: 1fr; }.sales-top-actions .btn { padding: 9px 13px; } }
 .crm-tabs { display: inline-flex; gap: 4px; margin-top: 25px; padding: 4px; border-radius: 12px; background: rgba(255,255,255,.05); }.crm-tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 9px; color: var(--muted); background: transparent; font-size: .8rem; font-weight: 700; }.crm-tabs button.active { color: #041226; background: var(--cyan); box-shadow: 0 3px 12px rgba(85,236,255,.2); }.quota-banner .quota-cta { margin-left: auto; padding: 10px 16px; border-radius: 10px; font-size: .76rem; font-weight: 800; white-space: nowrap; }
+.th-sort { display: inline-flex; align-items: center; gap: 5px; padding: 0; color: #7581aa; background: transparent; font-size: .72rem; font-weight: 700; }
+.th-sort:hover { color: var(--cyan); }
+.th-sort.active { color: var(--cyan); }
+.contact-copy { display: inline-flex; align-items: center; gap: 6px; max-width: 230px; }
+.contact-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-action.mini { width: 24px; height: 24px; border-radius: 7px; }
+.check-inline { display: inline-flex; align-items: center; gap: 7px; color: #99a5ca; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.check-inline input { width: auto; accent-color: var(--cyan); }
+.email-edit { display: inline-flex; align-items: center; gap: 6px; }
+.email-edit input { width: 210px; border: 1px solid rgba(177,192,255,.16); border-radius: 9px; color: #f6f7ff; background: rgba(5,8,29,.55); padding: 8px 10px; font-size: .72rem; }

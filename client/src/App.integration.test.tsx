@@ -12,14 +12,14 @@ const trpcMocks = vi.hoisted(() => {
   const mutation = () => ({ mutate: vi.fn(), isPending: false });
   return {
     lead,
-    status: mutation(), note: mutation(), contact: mutation(), updateNote: mutation(), export: mutation(), search: mutation(), rerun: mutation(), profile: mutation(), password: mutation(),
+    status: mutation(), note: mutation(), contact: mutation(), updateNote: mutation(), updateDetails: mutation(), export: mutation(), search: mutation(), rerun: mutation(), profile: mutation(), password: mutation(),
     trpc: {
       useUtils: () => ({ leads: { list: { invalidate: vi.fn() }, metrics: { invalidate: vi.fn() }, details: { invalidate: vi.fn() } }, places: { history: { invalidate: vi.fn() } }, auth: { me: { invalidate: vi.fn() } } }),
       leads: {
         list: { useQuery: () => query([lead]) }, metrics: { useQuery: () => query({ total: 1, byStatus: [{ status: "Novo", count: 1 }] }) }, details: { useQuery: () => query({ lead, notes: [], contacts: [] }) },
-        updateStatus: { useMutation: () => trpcMocks.status }, addNote: { useMutation: () => trpcMocks.note }, addContact: { useMutation: () => trpcMocks.contact }, updateNote: { useMutation: () => trpcMocks.updateNote }, export: { useMutation: () => trpcMocks.export },
+        updateStatus: { useMutation: () => trpcMocks.status }, addNote: { useMutation: () => trpcMocks.note }, addContact: { useMutation: () => trpcMocks.contact }, updateNote: { useMutation: () => trpcMocks.updateNote }, updateDetails: { useMutation: () => trpcMocks.updateDetails }, export: { useMutation: () => trpcMocks.export },
       },
-      places: { history: { useQuery: () => query([]) }, quota: { useQuery: () => query({ plan: { name: "Scale" }, allowed: true, reason: null, searchesLeft: null, leadsLeft: null }) }, search: { useMutation: () => trpcMocks.search }, rerun: { useMutation: () => trpcMocks.rerun } },
+      places: { history: { useQuery: () => query([]) }, quota: { useQuery: () => query({ plan: { id: "scale", name: "Scale" }, allowed: true, reason: null, searchesLeft: null, leadsLeft: null, totalLeadsLeft: null }) }, search: { useMutation: () => trpcMocks.search }, rerun: { useMutation: () => trpcMocks.rerun } },
       auth: { updateProfile: { useMutation: () => trpcMocks.profile }, changePassword: { useMutation: () => trpcMocks.password } },
     },
   };

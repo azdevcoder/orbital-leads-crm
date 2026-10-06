@@ -22,6 +22,9 @@ const leadFiltersSchema = z.object({
   city: z.string().trim().max(160).optional(),
   query: z.string().trim().max(160).optional(),
   selectedIds: z.array(z.number().int().positive()).max(500).optional(),
+  hasPhone: z.boolean().optional(),
+  sortBy: z.enum(["name", "segment", "location", "rating", "status"]).optional(),
+  sortDir: z.enum(["asc", "desc"]).optional(),
 });
 
 function safeUser(user: { id: number; name: string | null; email: string | null; phone?: string | null; role: RoleId; plan?: string | null }) {
@@ -98,6 +101,7 @@ function makeExportRows(leads: Awaited<ReturnType<typeof db.listLeads>>) {
   return leads.map(lead => ({
     Nome: lead.name,
     Telefone: lead.phone ?? "",
+    Email: lead.email ?? "",
     "Endereço completo": lead.fullAddress ?? "",
     Website: lead.website ?? "",
     Avaliação: lead.rating ?? "",
@@ -112,6 +116,7 @@ function makeExportRows(leads: Awaited<ReturnType<typeof db.listLeads>>) {
 const exportColumns = [
   { label: "Nome", value: "Nome" },
   { label: "Telefone", value: "Telefone" },
+  { label: "Email", value: "Email" },
   { label: "Endereço completo", value: "Endereço completo" },
   { label: "Website", value: "Website" },
   { label: "Avaliação", value: "Avaliação" },
@@ -336,6 +341,7 @@ export const appRouter = router({
         z.object({
           leadId: z.number().int().positive(),
           phone: z.string().trim().max(64).nullable().optional(),
+          email: z.string().trim().email("Indique um email válido.").max(320).nullable().optional(),
           website: z.string().trim().url().max(512).nullable().optional(),
           fullAddress: z.string().trim().max(1000).nullable().optional(),
         })

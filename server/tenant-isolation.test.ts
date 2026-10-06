@@ -5,6 +5,7 @@ const dbMocks = vi.hoisted(() => ({
   listLeads: vi.fn(),
   updateLeadStatus: vi.fn(),
   updateLeadNote: vi.fn(),
+  updateLeadDetails: vi.fn(),
 }));
 
 vi.mock("./db", () => dbMocks);
@@ -73,6 +74,26 @@ describe("isolamento por tenant", () => {
     });
     expect(result.filename).toMatch(/^leads-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(result.mimeType).toBe("text/csv;charset=utf-8");
+  });
+
+  it("ordena colunas e filtra só leads com telefone", async () => {
+    const caller = appRouter.createCaller(tenantContext("tenant-epsilon"));
+    await caller.leads.list({ sortBy: "rating", sortDir: "desc", hasPhone: true });
+
+    expect(dbMocks.listLeads).toHaveBeenCalledWith("tenant-epsilon", {
+      sortBy: "rating",
+      sortDir: "desc",
+      hasPhone: true,
+    });
+  });
+
+  it("atualiza o email do lead no tenant autenticado", async () => {
+    dbMocks.updateLeadDetails.mockResolvedValue({ id: 42, email: "contato@empresa.com" });
+    const caller = appRouter.createCaller(tenantContext("tenant-zeta"));
+    const result = await caller.leads.updateDetails({ leadId: 42, email: "contato@empresa.com" });
+
+    expect(dbMocks.updateLeadDetails).toHaveBeenCalledWith("tenant-zeta", 42, { email: "contato@empresa.com" });
+    expect(result).toMatchObject({ id: 42 });
   });
 
   it("plano Start não move cards no Kanban nem exporta", async () => {

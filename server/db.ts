@@ -1,4 +1,5 @@
-import { and, desc, eq, inArray, like, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, like, ne, or, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/node-postgres";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
@@ -20,12 +21,19 @@ import { ENV } from "./_core/env";
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
 
+export const LEAD_SORT_COLUMNS = ["name", "segment", "location", "rating", "status"] as const;
+export type LeadSortColumn = (typeof LEAD_SORT_COLUMNS)[number];
+
 export type LeadFilters = {
   status?: PipelineStatus;
   segment?: string;
   city?: string;
   query?: string;
   selectedIds?: number[];
+  /** Só leads com telefone preenchido. */
+  hasPhone?: boolean;
+  sortBy?: LeadSortColumn;
+  sortDir?: "asc" | "desc";
 };
 
 export type CapturedLead = {
@@ -378,12 +386,16 @@ function leadConditions(tenantId: string, filters: LeadFilters) {
   if (filters.segment) conditions.push(eq(leads.segment, filters.segment));
   if (filters.city) conditions.push(eq(leads.city, filters.city));
   if (filters.selectedIds?.length) conditions.push(inArray(leads.id, filters.selectedIds));
+  if (filters.hasPhone) {
+    conditions.push(and(isNotNull(leads.phone), ne(leads.phone, ""))!);
+  }
   if (filters.query?.trim()) {
     const term = `%${filters.query.trim()}%`;
     conditions.push(
       or(
         like(leads.name, term),
         like(leads.phone, term),
+        like(leads.email, term),
         like(leads.fullAddress, term),
         like(leads.website, term)
       )!
@@ -392,13 +404,33 @@ function leadConditions(tenantId: string, filters: LeadFilters) {
   return and(...conditions);
 }
 
+/** Ordenação da lista (colunas fixas — sem SQL dinâmico). */
+export function leadOrderBy(filters: LeadFilters) {
+  const dir = filters.sortDir === "desc" ? "desc" : "asc";
+  const nullsLast = (column: AnyPgColumn) => sql`${column} ${sql.raw(dir)} nulls last`;
+  switch (filters.sortBy) {
+    case "name":
+      return [nullsLast(leads.name)];
+    case "segment":
+      return [nullsLast(leads.segment)];
+    case "location":
+      return [nullsLast(leads.city), nullsLast(leads.state)];
+    case "rating":
+      return [nullsLast(leads.rating)];
+    case "status":
+      return [nullsLast(leads.status)];
+    default:
+      return [desc(leads.updatedAt)];
+  }
+}
+
 export async function listLeads(tenantId: string, filters: LeadFilters = {}) {
   const db = await requireDb();
   return db
     .select()
     .from(leads)
     .where(leadConditions(tenantId, filters))
-    .orderBy(desc(leads.updatedAt));
+    .orderBy(...leadOrderBy(filters));
 }
 
 export async function getLeadById(tenantId: string, leadId: number) {
@@ -485,7 +517,7 @@ export async function updateLeadStatus(
 export async function updateLeadDetails(
   tenantId: string,
   leadId: number,
-  input: { phone?: string | null; website?: string | null; fullAddress?: string | null }
+  input: { phone?: string | null; email?: string | null; website?: string | null; fullAddress?: string | null }
 ) {
   const db = await requireDb();
   await db
