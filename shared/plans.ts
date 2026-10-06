@@ -50,7 +50,6 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     lifetimeLeads: null,
     features: [
       "Até 50 leads por dia",
-      "Buscas ilimitadas",
       "Lista de leads com filtros",
     ],
   },
@@ -65,7 +64,6 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     lifetimeLeads: null,
     features: [
       "Até 100 leads por dia",
-      "Buscas ilimitadas",
       "CRM completo com Kanban",
       "Ação direta no WhatsApp",
       "Exportação CSV e XLSX",
@@ -118,6 +116,8 @@ export type QuotaCheck = {
   searchesLeft: number | null;
   /** null = ilimitado */
   leadsLeft: number | null;
+  /** leads restantes no total (só planos vitalícios como o Grátis) */
+  totalLeadsLeft: number | null;
 };
 
 export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): QuotaCheck {
@@ -135,6 +135,7 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
       plan,
       searchesLeft: null,
       leadsLeft: 0,
+      totalLeadsLeft: 0,
     };
   }
   if (plan.searchesPerDay !== null && dailySearches >= plan.searchesPerDay) {
@@ -146,6 +147,7 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
       searchesLeft: 0,
       leadsLeft:
         plan.leadsPerDay !== null ? Math.max(0, plan.leadsPerDay - dailyLeads) : null,
+      totalLeadsLeft: null,
     };
   }
   if (plan.leadsPerDay !== null && dailyLeads >= plan.leadsPerDay) {
@@ -157,6 +159,7 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
       searchesLeft:
         plan.searchesPerDay !== null ? Math.max(0, plan.searchesPerDay - dailySearches) : null,
       leadsLeft: 0,
+      totalLeadsLeft: null,
     };
   }
   return {
@@ -165,6 +168,7 @@ export function checkSearchQuota(user: QuotaUser, now: Date = new Date()): Quota
     plan,
     searchesLeft: plan.searchesPerDay !== null ? plan.searchesPerDay - dailySearches : null,
     leadsLeft: plan.leadsPerDay !== null ? plan.leadsPerDay - dailyLeads : null,
+    totalLeadsLeft: plan.lifetimeLeads !== null ? Math.max(0, plan.lifetimeLeads - totalLeads) : null,
   };
 }
 

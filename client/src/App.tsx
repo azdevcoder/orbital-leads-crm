@@ -80,10 +80,15 @@ export function applyKanbanMove(input: { leadId: number; fromStatus?: string; ne
   if (input.leadId && input.nextStatus && input.nextStatus !== input.fromStatus) input.onMove(input.leadId, input.nextStatus);
 }
 
-function QuotaBanner({ quota }: { quota: { plan: { name: string }; allowed: boolean; reason: string | null; searchesLeft: number | null; leadsLeft: number | null } }) {
+function QuotaBanner({ quota }: { quota: { plan: { id: PlanId; name: string }; allowed: boolean; reason: string | null; searchesLeft: number | null; leadsLeft: number | null; totalLeadsLeft: number | null } }) {
   const parts: string[] = [];
-  parts.push(quota.searchesLeft === null ? "buscas ilimitadas" : `${quota.searchesLeft} ${quota.searchesLeft === 1 ? "busca restante" : "buscas restantes"} hoje`);
-  if (quota.leadsLeft !== null) parts.push(`${quota.leadsLeft.toLocaleString("pt-BR")} leads restantes hoje`);
+  if (quota.totalLeadsLeft !== null) {
+    parts.push(`${quota.totalLeadsLeft} ${quota.totalLeadsLeft === 1 ? "lead grátis restante" : "leads grátis restantes"} no total`);
+  } else {
+    if (quota.searchesLeft !== null) parts.push(`${quota.searchesLeft} ${quota.searchesLeft === 1 ? "busca restante" : "buscas restantes"} hoje`);
+    if (quota.leadsLeft !== null) parts.push(`${quota.leadsLeft.toLocaleString("pt-BR")} leads restantes hoje`);
+    if (parts.length === 0) parts.push("uso ilimitado");
+  }
   return (
     <div className={`quota-banner panel-glass${quota.allowed ? "" : " quota-exhausted"}`} role="status">
       <span className="plan-chip">{quota.plan.name}</span>

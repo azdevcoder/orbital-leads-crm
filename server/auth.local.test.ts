@@ -71,10 +71,10 @@ describe("auth local", () => {
     expect(cookies).toEqual([]);
   });
 
-  it("regista com IP e bloqueia a 4ª conta gratuita do mesmo IP", async () => {
+  it("regista com IP e bloqueia a 3ª conta gratuita do mesmo IP", async () => {
     dbMocks.getUserByEmail.mockResolvedValue(null);
-    dbMocks.countAccountsByIp.mockResolvedValue(2);
-    dbMocks.freeAccountsPerIpLimit.mockReturnValue(3);
+    dbMocks.countAccountsByIp.mockResolvedValue(1);
+    dbMocks.freeAccountsPerIpLimit.mockReturnValue(2);
     bcryptMocks.hash.mockResolvedValue("hash-nova");
     dbMocks.createLocalUser.mockResolvedValue({
       id: 10, openId: "local-10", name: "Nova Conta", email: "nova@empresa.pt",
@@ -92,7 +92,7 @@ describe("auth local", () => {
     expect(dbMocks.countAccountsByIp).toHaveBeenCalledWith("203.0.113.9");
     expect(dbMocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ signupIp: "203.0.113.9" }));
 
-    dbMocks.countAccountsByIp.mockResolvedValue(3);
+    dbMocks.countAccountsByIp.mockResolvedValue(2);
     await expect(
       appRouter.createCaller(ctx).auth.register({
         name: "Outra", email: "outra@empresa.pt", phone: "+55 19 99999-0001", password: "senha1234",

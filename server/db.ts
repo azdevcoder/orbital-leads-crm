@@ -131,8 +131,8 @@ export async function countAccountsByIp(ip: string): Promise<number> {
 }
 
 export function freeAccountsPerIpLimit(): number {
-  const raw = Number(process.env.FREE_PER_IP_LIMIT ?? 3);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 3;
+  const raw = Number(process.env.FREE_PER_IP_LIMIT ?? 2);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 2;
 }
 
 /** Regista uma busca concluída nos contadores de cota do tenant. */

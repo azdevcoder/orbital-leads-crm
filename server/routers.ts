@@ -284,6 +284,7 @@ export const appRouter = router({
         maxResults: check.maxResults,
         searchesLeft: check.searchesLeft,
         leadsLeft: check.leadsLeft,
+        totalLeadsLeft: check.totalLeadsLeft,
       };
     }),
     rerun: protectedProcedure
